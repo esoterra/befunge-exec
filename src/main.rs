@@ -2,7 +2,7 @@ mod execution;
 
 use std::convert::TryFrom;
 use std::str::from_utf8;
-use std::io::stdin;
+use std::io::{ stdin, stdout, Write };
 use std::fs::File;
 use std::io::Result;
 use execution::{ Program, Runtime, Status };
@@ -26,6 +26,9 @@ fn run() -> Result<()> {
     let mut runtime = Runtime::from(&program);
 
     loop {
+        print!("> ");
+        stdout().flush();
+
         let mut buffer = String::new();
         input.read_line(&mut buffer)?;
         let bytes = buffer.as_bytes();
@@ -34,11 +37,17 @@ fn run() -> Result<()> {
             Some(b's') => {
                 step(&mut runtime);
             },
+            Some(b'r') => {
+                step_loop(&mut runtime);
+            },
             Some(b'i') => {
                 runtime.write_input(&bytes[2..]);
             },
             Some(b'p') => {
                 println!("{:?}", runtime.get_current_pos());
+            },
+            Some(b'd') => {
+                println!("{:?}", runtime);
             },
             Some(b'l') => {
                 let y = runtime.get_current_pos().y;
@@ -56,7 +65,7 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn step(runtime: &mut Runtime) {
+fn step(runtime: &mut Runtime) -> Status {
     let status = runtime.step();
 
     let output = runtime.read_output();
@@ -66,9 +75,36 @@ fn step(runtime: &mut Runtime) {
     }
     
     match status {
-        Status::Exception   => println!("Encountered an Exception"),
-        Status::Terminated  => println!("Encountered an Exception"),
+        Status::Terminated  => println!("Program terminated"),
         Status::Waiting     => println!("Waiting for input"),
         Status::Completed   => {}
+    }
+
+    status
+}
+
+fn step_loop(runtime: &mut Runtime) {
+    loop {
+        let status = runtime.step();
+
+        match status {
+            Status::Completed => {},
+            Status::Terminated  => {
+                println!("Program terminated");
+                break;
+            }
+            Status::Waiting => {
+                println!("Waiting for input");
+                break;
+            }
+        }
+
+        let output = runtime.read_output();
+        let output_string = from_utf8(&output).unwrap();
+        if output.len() != 0 {
+            print!("{}", output_string);
+        }
+
+        stdout().flush();
     }
 }

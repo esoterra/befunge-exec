@@ -14,6 +14,7 @@ pub struct Position {
     pub y: usize
 }
 
+#[derive(Debug)]
 pub struct Program {
     data: Vec<u8>,
     line_offsets: Vec<usize>,
@@ -79,15 +80,16 @@ impl Program {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Direction {
     Up, Down, Left, Right
 }
 
 pub enum Status {
-    Completed, Waiting, Exception, Terminated
+    Completed, Waiting, Terminated
 }
 
+#[derive(Debug)]
 pub struct Runtime<'a> {
     program: &'a Program,
     overlay: HashMap<Position, u8>,
@@ -123,10 +125,6 @@ impl<'a> Runtime<'a> {
         &self.current_pos
     }
 
-    pub fn get_current_dir(&self) -> &Direction {
-        &self.current_dir
-    }
-
     pub fn get_opcode(&self, pos: &Position) -> u8 {
         match self.overlay.get(pos) {
             Some(opcode) => *opcode,
@@ -148,13 +146,6 @@ impl<'a> Runtime<'a> {
     fn set_opcode(&mut self, pos: Position, opcode: u8) {
         self.overlay.insert(pos, opcode);
     }
-    
-    fn move_manual(&mut self, dir: Direction, amount: usize) {
-        self.current_dir = dir;
-        for _ in 0..amount {
-            self.move_auto();
-        }
-    }
 
     fn move_auto(&mut self) {
         match self.current_dir {
@@ -172,23 +163,8 @@ impl<'a> Runtime<'a> {
         }
     }
 
-    fn pop2(&mut self) -> Option<(u8, u8)> {
-        let e1 = self.stack.pop();
-        let e2 = self.stack.pop();
-        match (e1, e2) {
-            (Some(v1), Some(v2)) => Some((v1, v2)),
-            _ => None
-        }
-    }
-    
-    fn pop3(&mut self) -> Option<(u8, u8, u8)> {
-        let e1 = self.stack.pop();
-        let e2 = self.stack.pop();
-        let e3 = self.stack.pop();
-        match (e1, e2, e3) {
-            (Some(v1), Some(v2), Some(v3)) => Some((v1, v2, v3)),
-            _ => None
-        }
+    fn pop(&mut self) -> u8 {
+        self.stack.pop().unwrap_or(0)
     }
 
     pub fn step(&mut self) -> Status {
@@ -213,112 +189,85 @@ impl<'a> Runtime<'a> {
     fn step_unquoted(&mut self, opcode: u8) -> Status {
         match opcode {
             b'+' => {
-                if let Some((v1, v2)) = self.pop2() {
-                    self.stack.push(v2 + v1);
-                    self.move_auto();
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let (e1, e2) = (self.pop(), self.pop());
+                self.stack.push(e2 + e1);
+                self.move_auto();
+                Status::Completed
             },
             b'-' => {
-                if let Some((v1, v2)) = self.pop2() {
-                    self.stack.push(v2 - v1);
-                    self.move_auto();
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let (e1, e2) = (self.pop(), self.pop());
+                self.stack.push(e2 - e1);
+                self.move_auto();
+                Status::Completed
             },
             b'*' => {
-                if let Some((v1, v2)) = self.pop2() {
-                    self.stack.push(v2 * v1);
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let (e1, e2) = (self.pop(), self.pop());
+                self.stack.push(e2 * e1);
+                self.move_auto();
+                Status::Completed
             },
             b'/' => {
-                if let Some((v1, v2)) = self.pop2() {
-                    self.stack.push(v2 / v1);
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let (e1, e2) = (self.pop(), self.pop());
+                self.stack.push(e2 / e1);
+                self.move_auto();
+                Status::Completed
             },
             b'%' => {
-                if let Some((v1, v2)) = self.pop2() {
-                    self.stack.push(v2 % v1);
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let (e1, e2) = (self.pop(), self.pop());
+                self.stack.push(e2 % e1);
+                self.move_auto();
+                Status::Completed
             },
             b'!' => {
-                if let Some(value) = self.stack.pop() {
-                    if value == 0 {
-                        self.stack.push(1);
-                    } else {
-                        self.stack.push(0);
-                    }
-                    Status::Completed
+                if self.pop() == 0 {
+                    self.stack.push(1);
                 } else {
-                    Status::Exception
+                    self.stack.push(0);
                 }
+                Status::Completed
             },
             b'`' => {
-                if let Some((v1, v2)) = self.pop2() {
-                    let result = if v1 > v2 { 1 } else { 0 };
-                    self.stack.push(result);
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let (e1, e2) = (self.pop(), self.pop());
+                let result = if e1 > e2 { 1 } else { 0 };
+                self.stack.push(result);
+                self.move_auto();
+                Status::Completed
             },
             b'>' => {
-                self.move_manual(Direction::Right, 1);
+                self.current_dir = Direction::Right;
+                self.move_auto();
                 Status::Completed
             },
             b'<' => {
-                self.move_manual(Direction::Left, 1);
+                self.current_dir = Direction::Left;
+                self.move_auto();
                 Status::Completed
             },
             b'^' => {
-                self.move_manual(Direction::Up, 1);
+                self.current_dir = Direction::Up;
+                self.move_auto();
                 Status::Completed
             },
             b'v' => {
-                self.move_manual(Direction::Down, 1);
+                self.current_dir = Direction::Down;
+                self.move_auto();
                 Status::Completed
             },
             b'?' => {
                 let dir = [Direction::Right, Direction::Left, Direction::Up, Direction::Down].choose(&mut rand::thread_rng());
-                self.move_manual(*(dir.unwrap()), 1);
+                self.current_dir = *(dir.unwrap());
+                self.move_auto();
                 Status::Completed
             },
             b'_' => {
-                if let Some(value) = self.stack.pop() {
-                    if value == 0 {
-                        self.move_manual(Direction::Right, 1);
-                    } else {
-                        self.move_manual(Direction::Left, 1);
-                    }
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                self.current_dir = if self.pop() == 0 { Direction::Right } else { Direction::Left };
+                self.move_auto();
+                Status::Completed
             },
             b'|' => {
-                if let Some(value) = self.stack.pop() {
-                    if value == 0 {
-                        self.move_manual(Direction::Down, 1);
-                    } else {
-                        self.move_manual(Direction::Up, 1);
-                    }
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                self.current_dir = if self.pop() == 0 { Direction::Down } else { Direction::Up };
+                self.move_auto();
+                Status::Completed
             },
             b'"' => {
                 self.quote_mode = true;
@@ -326,52 +275,39 @@ impl<'a> Runtime<'a> {
                 Status::Completed
             },
             b':' => {
-                if let Some(value) = self.stack.pop() {
-                    self.stack.push(value);
-                    self.stack.push(value);
-                    self.move_auto();
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let value = self.pop();
+                self.stack.push(value);
+                self.stack.push(value);
+                self.move_auto();
+                Status::Completed
             },
             b'\\' => {
-                if let Some((v1, v2)) = self.pop2() {
-                    self.stack.push(v2);
-                    self.stack.push(v1);
-                    self.move_auto();
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let (e1, e2) = (self.pop(), self.pop());
+                self.stack.push(e2);
+                self.stack.push(e1);
+                self.move_auto();
+                Status::Completed
             },
             b'$' => {
-                self.stack.pop();
+                self.pop();
                 self.move_auto();
                 Status::Completed
             },
             b'.' => {
-                if let Some(value) = self.stack.pop() {
-                    self.output_buffer.push(' ' as u8);
-                    for byte in format!("{}", value).as_bytes() {
-                        self.output_buffer.push(*byte);
-                    }
-                    self.move_auto();
-                    Status::Completed
-                } else {
-                    Status::Exception
+                let value = self.pop();
+                self.output_buffer.push(' ' as u8);
+                for byte in format!("{}", value).as_bytes() {
+                    self.output_buffer.push(*byte);
                 }
+                self.move_auto();
+                Status::Completed
             },
             b',' => {
-                if let Some(value) = self.stack.pop() {
-                    self.output_buffer.push(' ' as u8);
-                    self.output_buffer.push(value);
-                    print!("{}", (value as char));
-                    self.move_auto();
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let value = self.pop();
+                self.output_buffer.push(' ' as u8);
+                self.output_buffer.push(value);
+                self.move_auto();
+                Status::Completed
             },
             b'#' => {
                 self.move_auto();
@@ -379,23 +315,17 @@ impl<'a> Runtime<'a> {
                 Status::Completed
             },
             b'g' => {
-                if let Some((v1, v2)) = self.pop2() {
-                    let value = self.get_opcode(&Position { x: v1 as usize, y: v2 as usize });
-                    self.stack.push(value);
-                    self.move_auto();
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let (e1, e2) = (self.pop(), self.pop());
+                let value = self.get_opcode(&Position { x: e1 as usize, y: e2 as usize });
+                self.stack.push(value);
+                self.move_auto();
+                Status::Completed
             },
             b'p' => {
-                if let Some((v1, v2, v3)) = self.pop3() {
-                    self.set_opcode(Position { x: v1 as usize, y: v2 as usize }, v3);
-                    self.move_auto();
-                    Status::Completed
-                } else {
-                    Status::Exception
-                }
+                let (e1, e2, e3) = (self.pop(), self.pop(), self.pop());
+                self.set_opcode(Position { x: e1 as usize, y: e2 as usize }, e3);
+                self.move_auto();
+                Status::Completed
             },
             b'&' => {
                 if let Some(input) = self.input_buffer.pop_front() {
