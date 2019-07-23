@@ -1,0 +1,8 @@
+[package]
+name = "befunge-exec"
+version = "0.1.0"
+authors = ["t-kybrow"]
+edition = "2018"
+
+[dependencies]
+rand = "0.7.0"
