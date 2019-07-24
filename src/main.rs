@@ -8,19 +8,25 @@ use std::io::Result;
 use execution::{ Program, Runtime, Status };
 
 fn main() {
-    let _ = run();
+    match run() {
+        Ok(_) => println!("Shell exited correctly"),
+        Err(message) => {
+            println!("Shell exited with error");
+            println!("{}", message);
+        }
+    }
 }
 
 fn run() -> Result<()> {
     let input = stdin();
 
-    // print!("Enter a file name: ");
+    print!("Enter a file name: ");
+    stdout().flush()?;
 
-    // let mut file_name = String::new();
-    // input.read_line(&mut file_name)?;
-
-    // let file_name = String::from("./programs/helloworld.b98");
-    let file_name = String::from("./programs/factorial.b98");
+    let mut file_name = String::new();
+    input.read_line(&mut file_name)?;
+    let file_name = format!("./programs/{}.b98", file_name.trim());
+    println!("Loading file {}", file_name);
 
     let file = File::open(file_name)?;
     let program = Program::try_from(file)?;
@@ -32,7 +38,7 @@ fn run() -> Result<()> {
 
         let mut buffer = String::new();
         input.read_line(&mut buffer)?;
-        let bytes = buffer.as_bytes();
+        let bytes = buffer.trim().as_bytes();
 
         match bytes.get(0) {
             Some(b's') => {
@@ -91,10 +97,12 @@ fn step_loop(runtime: &mut Runtime) -> Result<()> {
         match status {
             Status::Completed => {},
             Status::Terminated  => {
+                println!();
                 println!("Program terminated");
                 break;
             }
             Status::Waiting => {
+                println!();
                 println!("Waiting for input");
                 break;
             }
