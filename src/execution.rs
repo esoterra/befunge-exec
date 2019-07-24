@@ -60,7 +60,12 @@ impl TryFrom<File> for Program {
 
         if let Some(c) = data.last() {
             if *c != b'\n' {
-                line_ends.push(data.len());
+                let last_end = data.len();
+                line_ends.push(last_end);
+
+                if last_end - line_starts.last().unwrap() > width {
+                    width = last_end - line_starts.last().unwrap();
+                }
             }
         } else {
             line_ends.push(1);
@@ -213,8 +218,9 @@ impl<'a> Runtime<'a> {
                 Status::Completed
             },
             b'-' => {
-                let (e1, e2) = (self.pop(), self.pop());
-                let result = Wrapping(e2) - Wrapping(e1);
+                let upper = self.pop();
+                let lower = self.pop();
+                let result = Wrapping(lower) - Wrapping(upper);
                 self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
@@ -227,15 +233,17 @@ impl<'a> Runtime<'a> {
                 Status::Completed
             },
             b'/' => {
-                let (e1, e2) = (self.pop(), self.pop());
-                let result = Wrapping(e2) / Wrapping(e1);
+                let upper = self.pop();
+                let lower = self.pop();
+                let result = Wrapping(lower) / Wrapping(upper);
                 self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
             },
             b'%' => {
-                let (e1, e2) = (self.pop(), self.pop());
-                let result = Wrapping(e2) + Wrapping(e1);
+                let upper = self.pop();
+                let lower = self.pop();
+                let result = Wrapping(lower) % Wrapping(upper);
                 self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
@@ -250,8 +258,9 @@ impl<'a> Runtime<'a> {
                 Status::Completed
             },
             b'`' => {
-                let (e1, e2) = (self.pop(), self.pop());
-                let result = if e1 > e2 { 1 } else { 0 };
+                let upper = self.pop();
+                let lower = self.pop();
+                let result = if lower > upper { 1 } else { 0 };
                 self.stack.push(result);
                 self.move_auto();
                 Status::Completed
@@ -305,9 +314,10 @@ impl<'a> Runtime<'a> {
                 Status::Completed
             },
             b'\\' => {
-                let (e1, e2) = (self.pop(), self.pop());
-                self.stack.push(e2);
-                self.stack.push(e1);
+                let upper = self.pop();
+                let lower = self.pop();
+                self.stack.push(lower);
+                self.stack.push(upper);
                 self.move_auto();
                 Status::Completed
             },
@@ -318,7 +328,6 @@ impl<'a> Runtime<'a> {
             },
             b'.' => {
                 let value = self.pop();
-                self.output_buffer.push(' ' as u8);
                 for byte in format!("{}", value).as_bytes() {
                     self.output_buffer.push(*byte);
                 }
@@ -337,15 +346,18 @@ impl<'a> Runtime<'a> {
                 Status::Completed
             },
             b'g' => {
-                let (e1, e2) = (self.pop(), self.pop());
-                let value = self.get_opcode(&Position { x: e1 as usize, y: e2 as usize });
+                let upper = self.pop();
+                let lower = self.pop();
+                let value = self.get_opcode(&Position { x: lower as usize, y: upper as usize });
                 self.stack.push(value);
                 self.move_auto();
                 Status::Completed
             },
             b'p' => {
-                let (e1, e2, e3) = (self.pop(), self.pop(), self.pop());
-                self.set_opcode(Position { x: e1 as usize, y: e2 as usize }, e3);
+                let upper = self.pop();
+                let middle = self.pop();
+                let lower = self.pop();
+                self.set_opcode(Position { x: middle as usize, y: upper as usize }, lower);
                 self.move_auto();
                 Status::Completed
             },
