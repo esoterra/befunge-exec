@@ -7,6 +7,7 @@ use std::io::prelude::*;
 use std::io::Result;
 use std::io::Error;
 use rand::seq::SliceRandom;
+use std::num::Wrapping;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct Position {
@@ -17,7 +18,8 @@ pub struct Position {
 #[derive(Debug)]
 pub struct Program {
     data: Vec<u8>,
-    line_offsets: Vec<usize>,
+    line_starts: Vec<usize>,
+    line_ends: Vec<usize>,
     width: usize,
     height: usize
 }
@@ -32,50 +34,65 @@ impl TryFrom<File> for Program {
         input_file.read_to_string(&mut file_str)?;
 
         let data = file_str.into_bytes();
-        let mut line_offsets = Vec::new();
+        let mut line_starts = Vec::new();
+        let mut line_ends = Vec::new();
 
-        let mut last_offset = 0;
         let mut width = 0;
 
-        line_offsets.push(0);
+        line_starts.push(0);
 
         for (i, c) in data.iter().enumerate() {
             if *c == b'\n' {
-                line_offsets.push(i);
+                let new_end = i;
+                let new_start = i + 1;
 
-                let row_width = i - last_offset;
-                last_offset = i;
+                let last_start = line_starts.last().unwrap();
+                let row_width = new_end - last_start;
 
                 if row_width > width {
                     width = row_width;
                 }
+                
+                line_ends.push(new_end);
+                line_starts.push(new_start);
             }
         }
 
-        let height = line_offsets.len() + 1;
+        if let Some(c) = data.last() {
+            if *c != b'\n' {
+                line_ends.push(data.len());
+            }
+        } else {
+            line_ends.push(1);
+        }
 
-        Ok(Program { data, line_offsets, width, height })
+        let height = line_starts.len();
+
+        Ok(Program { data, line_starts, line_ends, width, height })
     }
 }
 
 impl Program {
     fn get(&self, pos: &Position) -> u8 {
-        if let Some(offset) = self.line_offsets.get(pos.y) {
-            if let Some(opcode) = self.data.get(offset + pos.x) {
-                *opcode
+        if let Some(line_start) = self.line_starts.get(pos.y) {
+            if let Some(line_end) = self.line_ends.get(pos.y) {
+                let line_width = line_end - line_start;
+                if pos.x > line_width {
+                    b' '
+                } else {
+                    self.data[line_start + pos.x]
+                }
             } else {
                 b' '
             }
         } else {
             b' '
         }
-        
     }
 
     pub fn get_line(&self, index: usize) -> Option<&[u8]> {
-        let start = self.line_offsets.get(index)?;
-        let eof = self.data.len();
-        let end = self.line_offsets.get(index + 1).unwrap_or(&eof);
+        let start = self.line_starts.get(index)?;
+        let end = self.line_ends.get(index)?;
         Some(&self.data[*start..*end])
     }
 }
@@ -190,31 +207,36 @@ impl<'a> Runtime<'a> {
         match opcode {
             b'+' => {
                 let (e1, e2) = (self.pop(), self.pop());
-                self.stack.push(e2 + e1);
+                let result = Wrapping(e2) + Wrapping(e1);
+                self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
             },
             b'-' => {
                 let (e1, e2) = (self.pop(), self.pop());
-                self.stack.push(e2 - e1);
+                let result = Wrapping(e2) - Wrapping(e1);
+                self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
             },
             b'*' => {
                 let (e1, e2) = (self.pop(), self.pop());
-                self.stack.push(e2 * e1);
+                let result = Wrapping(e2) * Wrapping(e1);
+                self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
             },
             b'/' => {
                 let (e1, e2) = (self.pop(), self.pop());
-                self.stack.push(e2 / e1);
+                let result = Wrapping(e2) / Wrapping(e1);
+                self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
             },
             b'%' => {
                 let (e1, e2) = (self.pop(), self.pop());
-                self.stack.push(e2 % e1);
+                let result = Wrapping(e2) + Wrapping(e1);
+                self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
             },
@@ -224,6 +246,7 @@ impl<'a> Runtime<'a> {
                 } else {
                     self.stack.push(0);
                 }
+                self.move_auto();
                 Status::Completed
             },
             b'`' => {
@@ -327,8 +350,9 @@ impl<'a> Runtime<'a> {
                 Status::Completed
             },
             b'&' => {
-                if let Some(input) = self.input_buffer.pop_front() {
-                    self.stack.push(input);
+                if let Some(input_char) = self.input_buffer.pop_front() {
+                    let input_num = input_char - (b'0' as u8);
+                    self.stack.push(input_num);
                     self.move_auto();
                     Status::Completed
                 } else {
