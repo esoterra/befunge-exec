@@ -5,7 +5,8 @@ use std::str::from_utf8;
 use std::io::{ stdin, stdout, Write };
 use std::fs::File;
 use std::io::Result;
-use befunge93::{ Program, Runtime, Status };
+use befunge93::{ Program, Runtime, Status, Position };
+use std::collections::HashSet;
 
 fn main() {
     match run() {
@@ -31,6 +32,7 @@ fn run() -> Result<()> {
     let file = File::open(file_name)?;
     let program = Program::try_from(file)?;
     let mut runtime = Runtime::from(program);
+    let mut breakpoints = HashSet::new();
 
     loop {
         print!("> ");
@@ -45,7 +47,7 @@ fn run() -> Result<()> {
                 step(&mut runtime);
             },
             Some(b'r') => {
-                step_loop(&mut runtime)?;
+                step_loop(&mut runtime, &breakpoints)?;
             },
             Some(b'i') => {
                 runtime.write_input(&bytes[2..]);
@@ -55,6 +57,14 @@ fn run() -> Result<()> {
             },
             Some(b'd') => {
                 println!("{:?}", runtime);
+            },
+            Some(b'b') => {
+                if let Some(pos) = parse_breakpoint(bytes) {
+                    breakpoints.insert(pos);
+                } else {
+                    println!("Breakpoint (b) takes 2 arguments");
+                }
+
             },
             Some(b'l') => {
                 let line = runtime.get_line().unwrap_or(&[]);
@@ -89,7 +99,7 @@ fn step(runtime: &mut Runtime) -> Status {
     status
 }
 
-fn step_loop(runtime: &mut Runtime) -> Result<()> {
+fn step_loop(runtime: &mut Runtime, breakpoints: &HashSet<Position>) -> Result<()> {
     loop {
         let status = runtime.step();
 
@@ -114,7 +124,26 @@ fn step_loop(runtime: &mut Runtime) -> Result<()> {
         }
 
         stdout().flush()?;
+
+        if breakpoints.contains(runtime.get_current_pos()) {
+            println!("Breakpoint reached");
+            break;
+        }
     }
 
     Ok(())
+}
+
+fn parse_breakpoint(command: &[u8]) -> Option<Position> {
+    let sections: Vec<&[u8]> = command.split(|c| *c == b' ').collect();
+    if sections.len() == 3 {
+        let arg0 = from_utf8(sections[1]).ok()?;
+        let arg1 = from_utf8(sections[2]).ok()?;
+        let x: usize = String::from(arg0).parse().ok()?;
+        let y: usize = String::from(arg1).parse().ok()?;
+
+        Some(Position { x, y })
+    } else {
+        None
+    }
 }
