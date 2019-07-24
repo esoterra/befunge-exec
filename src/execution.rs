@@ -171,17 +171,32 @@ impl<'a> Runtime<'a> {
 
     fn move_auto(&mut self) {
         match self.current_dir {
-            Direction::Right => self.current_pos.x += 1,
-            Direction::Left  => self.current_pos.x -= 1,
-            Direction::Up    => self.current_pos.y -= 1,
-            Direction::Down  => self.current_pos.y += 1
-        }
-
-        if self.current_pos.x >= self.width {
-            self.current_pos.x = 0;
-        }
-        if self.current_pos.y >= self.height {
-            self.current_pos.y = 0;
+            Direction::Right => {
+                self.current_pos.x += 1;
+                if self.current_pos.x >= self.width {
+                    self.current_pos.x = 0;
+                }
+            },
+            Direction::Left => {
+                if self.current_pos.x == 0 {
+                    self.current_pos.x = self.width;
+                } else {
+                    self.current_pos.x -= 1;
+                }
+            },
+            Direction::Up => {
+                if self.current_pos.y == 0 {
+                    self.current_pos.x = self.height;
+                } else {
+                    self.current_pos.y -= 1;
+                }
+            },
+            Direction::Down  => {
+                self.current_pos.y += 1;
+                if self.current_pos.y >= self.height {
+                    self.current_pos.y = 0;
+                }
+            }
         }
     }
 
@@ -316,8 +331,8 @@ impl<'a> Runtime<'a> {
             b'\\' => {
                 let upper = self.pop();
                 let lower = self.pop();
-                self.stack.push(lower);
                 self.stack.push(upper);
+                self.stack.push(lower);
                 self.move_auto();
                 Status::Completed
             },
