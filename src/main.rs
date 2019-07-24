@@ -1,12 +1,11 @@
-mod execution;
-mod tests;
+mod befunge93;
 
 use std::convert::TryFrom;
 use std::str::from_utf8;
 use std::io::{ stdin, stdout, Write };
 use std::fs::File;
 use std::io::Result;
-use execution::{ Program, Runtime, Status };
+use befunge93::{ Program, Runtime, Status };
 
 fn main() {
     match run() {
