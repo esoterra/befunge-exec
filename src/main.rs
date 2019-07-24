@@ -1,4 +1,5 @@
 mod execution;
+mod tests;
 
 use std::convert::TryFrom;
 use std::str::from_utf8;
@@ -30,7 +31,7 @@ fn run() -> Result<()> {
 
     let file = File::open(file_name)?;
     let program = Program::try_from(file)?;
-    let mut runtime = Runtime::from(&program);
+    let mut runtime = Runtime::from(program);
 
     loop {
         print!("> ");
@@ -57,8 +58,7 @@ fn run() -> Result<()> {
                 println!("{:?}", runtime);
             },
             Some(b'l') => {
-                let y = runtime.get_current_pos().y;
-                let line = program.get_line(y).unwrap_or(&[]);
+                let line = runtime.get_line().unwrap_or(&[]);
                 let line_string = from_utf8(line);
                 println!("{:?}", line_string.unwrap());
             },
