@@ -19,7 +19,8 @@ fn run() -> Result<()> {
     // let mut file_name = String::new();
     // input.read_line(&mut file_name)?;
 
-    let file_name = String::from("./programs/helloworld.b98");
+    // let file_name = String::from("./programs/helloworld.b98");
+    let file_name = String::from("./programs/factorial.b98");
 
     let file = File::open(file_name)?;
     let program = Program::try_from(file)?;
@@ -27,7 +28,7 @@ fn run() -> Result<()> {
 
     loop {
         print!("> ");
-        stdout().flush();
+        stdout().flush()?;
 
         let mut buffer = String::new();
         input.read_line(&mut buffer)?;
@@ -38,7 +39,7 @@ fn run() -> Result<()> {
                 step(&mut runtime);
             },
             Some(b'r') => {
-                step_loop(&mut runtime);
+                step_loop(&mut runtime)?;
             },
             Some(b'i') => {
                 runtime.write_input(&bytes[2..]);
@@ -83,7 +84,7 @@ fn step(runtime: &mut Runtime) -> Status {
     status
 }
 
-fn step_loop(runtime: &mut Runtime) {
+fn step_loop(runtime: &mut Runtime) -> Result<()> {
     loop {
         let status = runtime.step();
 
@@ -105,6 +106,8 @@ fn step_loop(runtime: &mut Runtime) {
             print!("{}", output_string);
         }
 
-        stdout().flush();
+        stdout().flush()?;
     }
+
+    Ok(())
 }

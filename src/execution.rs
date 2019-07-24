@@ -304,7 +304,6 @@ impl<'a> Runtime<'a> {
             },
             b',' => {
                 let value = self.pop();
-                self.output_buffer.push(' ' as u8);
                 self.output_buffer.push(value);
                 self.move_auto();
                 Status::Completed
