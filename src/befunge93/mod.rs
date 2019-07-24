@@ -1,3 +1,5 @@
+mod test;
+
 use std::mem::replace;
 use std::convert::TryFrom;
 use std::collections::VecDeque;

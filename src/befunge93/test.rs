@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::execution::{ Program, Runtime, Status, Direction, Position };
+    use super::super::{ Program, Runtime, Status, Direction, Position };
 
     const EMPTY_STACK: &[u8] = &[];
 
