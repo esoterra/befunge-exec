@@ -1,6 +1,5 @@
 use std::mem::replace;
 use std::convert::TryFrom;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::prelude::*;
@@ -15,11 +14,9 @@ pub struct Position {
     pub y: usize
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct Program {
-    data: Vec<u8>,
-    line_starts: Vec<usize>,
-    line_ends: Vec<usize>,
+    data: Vec<Vec<u8>>,
     width: usize,
     height: usize
 }
@@ -33,60 +30,67 @@ impl TryFrom<File> for Program {
 
         input_file.read_to_string(&mut file_str)?;
 
-        let data = file_str.into_bytes();
-        let mut line_starts = Vec::new();
-        let mut line_ends = Vec::new();
+        let file_data = file_str.into_bytes();
+        let mut data = Vec::new();
 
+        let mut start = 0;
         let mut width = 0;
 
-        line_starts.push(0);
-
-        for (i, c) in data.iter().enumerate() {
+        for (i, c) in file_data.iter().enumerate() {
             if *c == b'\n' {
-                let new_end = i;
-                let new_start = i + 1;
-
-                let last_start = line_starts.last().unwrap();
-                let row_width = new_end - last_start;
+                let end = i;
+                let row_width = end - start;
 
                 if row_width > width {
                     width = row_width;
                 }
-                
-                line_ends.push(new_end);
-                line_starts.push(new_start);
+
+                data.push(Vec::from(&file_data[start..end]));
+
+                start = end + 1;
             }
         }
 
-        if let Some(c) = data.last() {
-            if *c != b'\n' {
-                let last_end = data.len();
-                line_ends.push(last_end);
+        if let Some(last_char) = file_data.last() {
+            if *last_char != b'\n' {
+                data.push(Vec::from(&file_data[start..]));
 
-                if last_end - line_starts.last().unwrap() > width {
-                    width = last_end - line_starts.last().unwrap();
+                let row_width = file_data.len() - start;
+                if row_width > width {
+                    width = row_width;
                 }
             }
-        } else {
-            line_ends.push(1);
         }
 
-        let height = line_starts.len();
+        let height = data.len();
 
-        Ok(Program { data, line_starts, line_ends, width, height })
+        Ok(Program { data, width, height })
+    }
+}
+
+impl From<Vec<Vec<u8>>> for Program {
+    fn from(input: Vec<Vec<u8>>) -> Self {
+        let height = input.len();
+        let mut width = 0;
+
+        for row in input.iter() {
+            if row.len() > width {
+                width = row.len();
+            }
+        }
+
+        Program {
+            data: input,
+            width, height
+        }
     }
 }
 
 impl Program {
     fn get(&self, pos: &Position) -> u8 {
-        if let Some(line_start) = self.line_starts.get(pos.y) {
-            if let Some(line_end) = self.line_ends.get(pos.y) {
-                let line_width = line_end - line_start;
-                if pos.x > line_width {
-                    b' '
-                } else {
-                    self.data[line_start + pos.x]
-                }
+        if let Some(row) = self.data.get(pos.y) {
+            if let Some(cell) = row.get(pos.x) {
+                *cell
             } else {
                 b' '
             }
@@ -95,28 +99,75 @@ impl Program {
         }
     }
 
+    fn set(&mut self, pos: &Position, opcode: u8) {
+        let min_height = pos.y + 1;
+        let min_width = pos.x + 1;
+
+        if self.data.len() < min_height {
+            self.data.resize(min_height, Vec::new());
+            self.height = min_height;
+        }
+        let row = &mut self.data[pos.y];
+
+        if row.len() < min_width {
+            row.resize(min_width, b' ');
+            
+            if min_width > self.width {
+                self.width = min_width;
+            }
+        }
+        row[pos.x] = opcode;
+    }
+
+    fn move_dir(&self, dir: Direction, pos: &mut Position) {
+        match dir {
+            Direction::Right => {
+                pos.x += 1;
+                if pos.x >= self.width {
+                    pos.x = 0;
+                }
+            },
+            Direction::Left => {
+                if pos.x == 0 {
+                    pos.x = self.width;
+                } else {
+                    pos.x -= 1;
+                }
+            },
+            Direction::Up => {
+                if pos.y == 0 {
+                    pos.y = self.height;
+                } else {
+                    pos.y -= 1;
+                }
+            },
+            Direction::Down  => {
+                pos.y += 1;
+                if pos.y >= self.height {
+                    pos.y = 0;
+                }
+            }
+        }
+    }
+
     pub fn get_line(&self, index: usize) -> Option<&[u8]> {
-        let start = self.line_starts.get(index)?;
-        let end = self.line_ends.get(index)?;
-        Some(&self.data[*start..*end])
+        self.data.get(index).map(|row| &row[..])
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Direction {
     Up, Down, Left, Right
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Status {
     Completed, Waiting, Terminated
 }
 
-#[derive(Debug)]
-pub struct Runtime<'a> {
-    program: &'a Program,
-    overlay: HashMap<Position, u8>,
-    width: usize,
-    height: usize,
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub struct Runtime {
+    program: Program,
     current_pos: Position,
     current_dir: Direction,
     stack: Vec<u8>,
@@ -125,13 +176,10 @@ pub struct Runtime<'a> {
     output_buffer: Vec<u8>
 }
 
-impl<'a> From<&'a Program> for Runtime<'a> {
-    fn from(prog: &'a Program) -> Self {
+impl From<Program> for Runtime {
+    fn from(prog: Program) -> Self {
         Runtime {
             program: prog,
-            overlay: HashMap::new(),
-            width: prog.width,
-            height: prog.height,
             current_pos: Position { x: 0, y: 0 },
             current_dir: Direction::Right,
             stack: Vec::new(),
@@ -142,16 +190,25 @@ impl<'a> From<&'a Program> for Runtime<'a> {
     }
 }
 
-impl<'a> Runtime<'a> {
+impl Runtime {
     pub fn get_current_pos(&self) -> &Position {
         &self.current_pos
     }
 
+    pub fn get_current_dir(&self) -> &Direction {
+        &self.current_dir
+    }
+
+    pub fn get_stack(&self) -> &[u8] {
+        &self.stack[..]
+    }
+
     pub fn get_opcode(&self, pos: &Position) -> u8 {
-        match self.overlay.get(pos) {
-            Some(opcode) => *opcode,
-            None => self.program.get(pos)
-        }
+        self.program.get(pos)
+    }
+
+    pub fn get_line(&self) -> Option<&[u8]> {
+        self.program.get_line(self.current_pos.y)
     }
 
     pub fn write_input(&mut self, input: &[u8]) {
@@ -166,38 +223,11 @@ impl<'a> Runtime<'a> {
     }
 
     fn set_opcode(&mut self, pos: Position, opcode: u8) {
-        self.overlay.insert(pos, opcode);
+        self.program.set(&pos, opcode);
     }
 
     fn move_auto(&mut self) {
-        match self.current_dir {
-            Direction::Right => {
-                self.current_pos.x += 1;
-                if self.current_pos.x >= self.width {
-                    self.current_pos.x = 0;
-                }
-            },
-            Direction::Left => {
-                if self.current_pos.x == 0 {
-                    self.current_pos.x = self.width;
-                } else {
-                    self.current_pos.x -= 1;
-                }
-            },
-            Direction::Up => {
-                if self.current_pos.y == 0 {
-                    self.current_pos.x = self.height;
-                } else {
-                    self.current_pos.y -= 1;
-                }
-            },
-            Direction::Down  => {
-                self.current_pos.y += 1;
-                if self.current_pos.y >= self.height {
-                    self.current_pos.y = 0;
-                }
-            }
-        }
+        self.program.move_dir(self.current_dir, &mut self.current_pos);
     }
 
     fn pop(&mut self) -> u8 {
