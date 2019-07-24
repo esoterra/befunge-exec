@@ -346,6 +346,7 @@ impl<'a> Runtime<'a> {
                 for byte in format!("{}", value).as_bytes() {
                     self.output_buffer.push(*byte);
                 }
+                self.output_buffer.push(b' ');
                 self.move_auto();
                 Status::Completed
             },
