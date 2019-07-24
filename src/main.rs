@@ -26,7 +26,7 @@ fn run() -> Result<()> {
 
     let mut file_name = String::new();
     input.read_line(&mut file_name)?;
-    let file_name = format!("./programs/{}.b98", file_name.trim());
+    let file_name = format!("./programs/{}.b93", file_name.trim());
     println!("Loading file {}", file_name);
 
     let file = File::open(file_name)?;
