@@ -80,7 +80,7 @@ fn step(runtime: &mut Runtime) -> Status {
     if output.len() != 0 {
         println!("{}", output_string);
     }
-    
+
     match status {
         Status::Terminated  => println!("Program terminated"),
         Status::Waiting     => println!("Waiting for input"),
