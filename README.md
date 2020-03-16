@@ -27,7 +27,7 @@ When prompted for commands type a value matching a single command format and the
 * Step "s" - Executes one opcode
 * Run "r" - Runs the program until a breakpoint is hit or the program terminates
 * Breakpoint "b \<x\> \<y\>" - Places a breakpoint at the specified location
-* Input "i.." - Sends the rest of your input into the input buffer of the interpreter byte for byte
+* Input "i .." - Sends the rest of your input into the input buffer of the interpreter byte for byte
 * Position "p" - Prints the current (x,y) coordinates of the kernel with the top left corner as (0,0)
 * Line "l" - Prints the current line of the program
 * Debug "d" - Prints the Rust debug formatted value of the entire interpreter
