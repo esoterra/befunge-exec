@@ -1,12 +1,18 @@
-mod befunge93;
+mod core;
+mod program;
+mod interpreter;
+#[cfg(test)]
+mod test;
 
-use std::convert::TryFrom;
 use std::str::from_utf8;
 use std::io::{ stdin, stdout, Write };
 use std::fs::File;
 use std::io::Result;
-use befunge93::{ Program, Runtime, Status, Position };
 use std::collections::HashSet;
+
+use crate::core::{ Position };
+use crate::program::{ VecProgram };
+use crate::interpreter::{ Interpreter, Status };
 
 fn main() {
     match run() {
@@ -30,8 +36,8 @@ fn run() -> Result<()> {
     println!("Loading file {}", file_name);
 
     let file = File::open(file_name)?;
-    let program = Program::try_from(file)?;
-    let mut runtime = Runtime::from(program);
+    let program = VecProgram::from_file(file)?;
+    let mut interpreter = Interpreter::from(program);
     let mut breakpoints = HashSet::new();
 
     loop {
@@ -44,19 +50,19 @@ fn run() -> Result<()> {
 
         match bytes.get(0) {
             Some(b's') => {
-                step(&mut runtime);
+                step(&mut interpreter);
             },
             Some(b'r') => {
-                step_loop(&mut runtime, &breakpoints)?;
+                step_loop(&mut interpreter, &breakpoints)?;
             },
             Some(b'i') => {
-                runtime.write_input(&bytes[2..]);
+                interpreter.write_input(&bytes[2..]);
             },
             Some(b'p') => {
-                println!("{:?}", runtime.get_current_pos());
+                println!("{:?}", interpreter.get_current_pos());
             },
             Some(b'd') => {
-                println!("{:?}", runtime);
+                println!("{:?}", interpreter);
             },
             Some(b'b') => {
                 if let Some(pos) = parse_breakpoint(bytes) {
@@ -67,7 +73,7 @@ fn run() -> Result<()> {
 
             },
             Some(b'l') => {
-                let line = runtime.get_line().unwrap_or(&[]);
+                let line = interpreter.get_line().unwrap_or(&[]);
                 let line_string = from_utf8(line);
                 println!("{:?}", line_string.unwrap());
             },
@@ -81,10 +87,10 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn step(runtime: &mut Runtime) -> Status {
-    let status = runtime.step();
+fn step(interpreter: &mut Interpreter<VecProgram>) -> Status {
+    let status = interpreter.step();
 
-    let output = runtime.read_output();
+    let output = interpreter.read_output();
     let output_string = from_utf8(&output).unwrap();
     if output.len() != 0 {
         println!("{}", output_string);
@@ -99,9 +105,9 @@ fn step(runtime: &mut Runtime) -> Status {
     status
 }
 
-fn step_loop(runtime: &mut Runtime, breakpoints: &HashSet<Position>) -> Result<()> {
+fn step_loop(interpreter: &mut Interpreter<VecProgram>, breakpoints: &HashSet<Position>) -> Result<()> {
     loop {
-        let status = runtime.step();
+        let status = interpreter.step();
 
         match status {
             Status::Completed => {},
@@ -117,7 +123,7 @@ fn step_loop(runtime: &mut Runtime, breakpoints: &HashSet<Position>) -> Result<(
             }
         }
 
-        let output = runtime.read_output();
+        let output = interpreter.read_output();
         let output_string = from_utf8(&output).unwrap();
         if output.len() != 0 {
             print!("{}", output_string);
@@ -125,7 +131,7 @@ fn step_loop(runtime: &mut Runtime, breakpoints: &HashSet<Position>) -> Result<(
 
         stdout().flush()?;
 
-        if breakpoints.contains(runtime.get_current_pos()) {
+        if breakpoints.contains(&interpreter.get_current_pos()) {
             println!("Breakpoint reached");
             break;
         }
