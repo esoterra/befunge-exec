@@ -1,16 +1,19 @@
 use std::mem::replace;
-use std::collections::VecDeque;
+use std::collections::{ HashMap, VecDeque };
 
 use crate::core::{ Position, Direction, Cursor, Mode };
 use crate::program::{ Program };
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 /// An Intepreter represents a step by step executor for befunge code.
 /// It contains a program, all necessary state, and IO buffers.
 pub struct Interpreter<P: Program> {
     program: P,
+    overlay: HashMap<Position, u8>,
+
     cursor: Cursor,
     stack: Vec<u8>,
+
     input_buffer: VecDeque<u8>,
     output_buffer: Vec<u8>
 }
@@ -42,6 +45,7 @@ impl<P> From<P> for Interpreter<P>
 
         Interpreter {
             program: program,
+            overlay: HashMap::new(),
             cursor,
             stack: Vec::new(),
             input_buffer: VecDeque::new(),
@@ -70,7 +74,16 @@ impl<P> Interpreter<P> where P: Program {
 
     /// Retrieves the opcode located at a position in the program
     pub fn get_opcode(&self, pos: Position) -> u8 {
-        self.program.get(pos)
+        if let Some(overlay_val) = self.overlay.get(&pos) {
+            *overlay_val
+        } else {
+            self.program.get(pos)
+        }
+    }
+
+    /// Updates the opcode at a specific position in the program
+    fn set_opcode(&mut self, pos: Position, opcode: u8) {
+        self.overlay.insert(pos, opcode);
     }
 
     /// Retrieves the current line the interpreter is on
@@ -89,10 +102,6 @@ impl<P> Interpreter<P> where P: Program {
     pub fn read_output(&mut self) -> Vec<u8> {
         let result = replace(&mut self.output_buffer, Vec::new());
         result
-    }
-
-    fn set_opcode(&mut self, pos: Position, opcode: u8) {
-        self.program.set(pos, opcode);
     }
 
     fn move_auto(&mut self) {
