@@ -35,8 +35,13 @@ pub enum Mode {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+/// A Cursor represents the necessary information to
+/// understand how to execute the next opcode
 pub struct Cursor {
+    /// The position of the cursor
     pub pos: Position,
+    /// The direction the cursor is going
     pub dir: Direction,
+    /// The mode of the cursor
     pub mode: Mode
 }
