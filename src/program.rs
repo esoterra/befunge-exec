@@ -20,9 +20,6 @@ pub trait Program {
 
     /// Retrieve the specified row of the program
     fn get_line(&self, row_index: usize) -> Option<&[u8]>;
-    
-    /// Update the opcode at a position
-    fn set(&mut self, pos: Position, opcode: u8) -> bool;
 
     /// Create a new position from a position and direction
     /// handling loop around at the maximum and minimum
@@ -56,7 +53,6 @@ pub trait Program {
 pub struct VecProgram {
     data: Vec<Vec<u8>>,
     width: usize,
-    height: usize
 }
 
 impl VecProgram {
@@ -98,14 +94,11 @@ impl VecProgram {
             }
         }
 
-        let height = data.len();
-
-        Ok(VecProgram { data, width, height })
+        Ok(VecProgram { data, width })
     }
 
     #[cfg(test)]
     pub fn from_vec(input: Vec<Vec<u8>>) -> Self {
-        let height = input.len();
         let mut width = 0;
 
         for row in input.iter() {
@@ -116,7 +109,7 @@ impl VecProgram {
 
         VecProgram {
             data: input,
-            width, height
+            width
         }
     }
 }
@@ -127,7 +120,7 @@ impl Program for VecProgram {
     }
 
     fn height(&self) -> usize {
-        self.height
+        self.data.len()
     }
 
     fn get(&self, pos: Position) -> u8 {
@@ -140,28 +133,6 @@ impl Program for VecProgram {
         } else {
             b' '
         }
-    }
-
-    fn set(&mut self, pos: Position, opcode: u8) -> bool {
-        let min_height = pos.y + 1;
-
-        if self.data.len() < min_height {
-            self.data.resize(min_height, Vec::new());
-        }
-        let row = &mut self.data[pos.y];
-        
-        let min_width = pos.x + 1;
-
-        if row.len() < min_width {
-            row.resize(min_width, b' ');
-            
-            if min_width > self.width {
-                self.width = min_width;
-            }
-        }
-        row[pos.x] = opcode;
-
-        true
     }
 
     fn get_line(&self, index: usize) -> Option<&[u8]> {
