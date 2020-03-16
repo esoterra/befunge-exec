@@ -5,6 +5,8 @@ use crate::core::{ Position, Direction, Cursor, Mode };
 use crate::program::{ Program };
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
+/// An Intepreter represents a step by step executor for befunge code.
+/// It contains a program, all necessary state, and IO buffers.
 pub struct Interpreter<P: Program> {
     program: P,
     cursor: Cursor,
@@ -14,8 +16,16 @@ pub struct Interpreter<P: Program> {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+/// The status of the Interpreter after it
+/// has executed an instruction
 pub enum Status {
-    Completed, Waiting, Terminated
+    /// The result of most normal instructions
+    Completed,
+    /// The result of executing an input instruction
+    /// with an empty input buffer
+    Waiting,
+    /// The result of executing the "@" termination instruction
+    Terminated
 }
 
 impl<P> From<P> for Interpreter<P>
@@ -58,21 +68,24 @@ impl<P> Interpreter<P> where P: Program {
         &self.stack[..]
     }
 
-
+    /// Retrieves the opcode located at a position in the program
     pub fn get_opcode(&self, pos: Position) -> u8 {
         self.program.get(pos)
     }
 
+    /// Retrieves the current line the interpreter is on
     pub fn get_line(&self) -> Option<&[u8]> {
         self.program.get_line(self.cursor.pos.y)
     }
 
+    /// Appends data to the input buffer
     pub fn write_input(&mut self, input: &[u8]) {
         for byte in input {
             self.input_buffer.push_back(*byte);
         }
     }
 
+    /// Reads and empties the output of the Interpreter
     pub fn read_output(&mut self) -> Vec<u8> {
         let result = replace(&mut self.output_buffer, Vec::new());
         result
@@ -90,6 +103,7 @@ impl<P> Interpreter<P> where P: Program {
         self.stack.pop().unwrap_or(0)
     }
 
+    /// Interprets the next command
     pub fn step(&mut self) -> Status {
         let opcode = self.get_opcode(self.cursor.pos);
     
