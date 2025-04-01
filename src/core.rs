@@ -3,10 +3,10 @@
 pub struct Position {
     /// The x dimension
     /// Corresponds to the column, indexed left to right.
-    pub x: usize,
+    pub x: u16,
     /// The y dimension
     /// Corresponds to the row, indexed from top to bottom.
-    pub y: usize
+    pub y: u16,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -19,7 +19,7 @@ pub enum Direction {
     /// The negative x direction
     Left,
     /// The positive x direction
-    Right
+    Right,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -28,10 +28,10 @@ pub enum Mode {
     /// Quotation mode
     /// Each command that is not a double quote (") is interpreted as a push of its own ascii value.
     /// The double quote command returns the cursor to normal mode
-    Stringmode,
+    Quote,
     /// Normal mode
-    /// Commands are interpretted as opcodes
-    Normalmode
+    /// Commands are interpreted as opcodes
+    Normal,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -43,5 +43,5 @@ pub struct Cursor {
     /// The direction the cursor is going
     pub dir: Direction,
     /// The mode of the cursor
-    pub mode: Mode
+    pub mode: Mode,
 }

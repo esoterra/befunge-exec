@@ -2,24 +2,24 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::Result;
 
-use crate::core::{ Position, Direction };
+use crate::core::{Direction, Position};
 
-/// A Program is executable 
+/// A Program is executable
 pub trait Program {
     /// Defines where the program wraps around horizontally
     /// This is also 1 larger than the maximum x index
-    fn width(&self) -> usize;
+    fn width(&self) -> u16;
 
     /// Defines where the program wraps around vertically
     /// This is also 1 larger than the maximum y index
-    fn height(&self) -> usize;
+    fn height(&self) -> u16;
 
     /// Retrieve the opcode located at a position
     /// Out of bound gets must return b' '
     fn get(&self, pos: Position) -> u8;
 
     /// Retrieve the specified row of the program
-    fn get_line(&self, row_index: usize) -> Option<&[u8]>;
+    fn get_line(&self, row_index: u16) -> Option<&[u8]>;
 
     /// Create a new position from a position and direction
     /// handling loop around at the maximum and minimum
@@ -30,16 +30,16 @@ pub trait Program {
                 let x = pos.x + 1;
                 let x = if x >= self.width() { 0 } else { x };
                 Position { x, y: pos.y }
-            },
+            }
             Direction::Left => {
                 let x = if pos.x == 0 { self.width() } else { pos.x - 1 };
                 Position { x, y: pos.y }
-            },
+            }
             Direction::Up => {
                 let y = if pos.y == 0 { self.height() } else { pos.y - 1 };
                 Position { x: pos.x, y }
-            },
-            Direction::Down  => {
+            }
+            Direction::Down => {
                 let y = pos.y + 1;
                 let y = if y >= self.height() { 0 } else { y };
                 Position { x: pos.x, y }
@@ -107,25 +107,22 @@ impl VecProgram {
             }
         }
 
-        VecProgram {
-            data: input,
-            width
-        }
+        VecProgram { data: input, width }
     }
 }
 
 impl Program for VecProgram {
-    fn width(&self) -> usize {
-        self.width
+    fn width(&self) -> u16 {
+        self.width as u16
     }
 
-    fn height(&self) -> usize {
-        self.data.len()
+    fn height(&self) -> u16 {
+        self.data.len() as u16
     }
 
     fn get(&self, pos: Position) -> u8 {
-        if let Some(row) = self.data.get(pos.y) {
-            if let Some(cell) = row.get(pos.x) {
+        if let Some(row) = self.data.get(pos.y as usize) {
+            if let Some(cell) = row.get(pos.x as usize) {
                 *cell
             } else {
                 b' '
@@ -135,7 +132,7 @@ impl Program for VecProgram {
         }
     }
 
-    fn get_line(&self, index: usize) -> Option<&[u8]> {
-        self.data.get(index).map(|row| &row[..])
+    fn get_line(&self, index: u16) -> Option<&[u8]> {
+        self.data.get(index as usize).map(|row| &row[..])
     }
 }

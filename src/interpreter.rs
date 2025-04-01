@@ -1,11 +1,11 @@
+use std::collections::{HashMap, VecDeque};
 use std::mem::replace;
-use std::collections::{ HashMap, VecDeque };
 
-use crate::core::{ Position, Direction, Cursor, Mode };
-use crate::program::{ Program };
+use crate::core::{Cursor, Direction, Mode, Position};
+use crate::program::Program;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-/// An Intepreter represents a step by step executor for befunge code.
+/// An Interpreter represents a step by step executor for befunge code.
 /// It contains a program, all necessary state, and IO buffers.
 pub struct Interpreter<P: Program> {
     program: P,
@@ -15,7 +15,7 @@ pub struct Interpreter<P: Program> {
     stack: Vec<u8>,
 
     input_buffer: VecDeque<u8>,
-    output_buffer: Vec<u8>
+    output_buffer: Vec<u8>,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -28,19 +28,20 @@ pub enum Status {
     /// with an empty input buffer
     Waiting,
     /// The result of executing the "@" termination instruction
-    Terminated
+    Terminated,
 }
 
 impl<P> From<P> for Interpreter<P>
-    where P: Program {
-
+where
+    P: Program,
+{
     /// Creates a new Interpreter that executes
     /// the provided program
     fn from(program: P) -> Self {
         let cursor = Cursor {
             pos: Position { x: 0, y: 0 },
             dir: Direction::Right,
-            mode: Mode::Normalmode
+            mode: Mode::Normal,
         };
 
         Interpreter {
@@ -49,12 +50,15 @@ impl<P> From<P> for Interpreter<P>
             cursor,
             stack: Vec::new(),
             input_buffer: VecDeque::new(),
-            output_buffer: Vec::new()
+            output_buffer: Vec::new(),
         }
     }
 }
 
-impl<P> Interpreter<P> where P: Program {
+impl<P> Interpreter<P>
+where
+    P: Program,
+{
     /// Get the position of the cursor
     pub fn get_current_pos(&self) -> Position {
         self.cursor.pos
@@ -115,17 +119,17 @@ impl<P> Interpreter<P> where P: Program {
     /// Interprets the next command
     pub fn step(&mut self) -> Status {
         let opcode = self.get_opcode(self.cursor.pos);
-    
+
         match self.cursor.mode {
-            Mode::Stringmode => self.step_quoted(opcode),
-            Mode::Normalmode => self.step_unquoted(opcode)
+            Mode::Quote => self.step_quoted(opcode),
+            Mode::Normal => self.step_unquoted(opcode),
         }
     }
 
     fn step_quoted(&mut self, opcode: u8) -> Status {
         match opcode {
-            b'"' => self.cursor.mode = Mode::Normalmode,
-            _    => self.stack.push(opcode)
+            b'"' => self.cursor.mode = Mode::Normal,
+            _ => self.stack.push(opcode),
         }
         self.move_auto();
         Status::Completed
@@ -141,7 +145,7 @@ impl<P> Interpreter<P> where P: Program {
                 self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'-' => {
                 let upper = self.pop();
                 let lower = self.pop();
@@ -149,14 +153,14 @@ impl<P> Interpreter<P> where P: Program {
                 self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'*' => {
                 let (e1, e2) = (self.pop(), self.pop());
                 let result = Wrapping(e2) * Wrapping(e1);
                 self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'/' => {
                 let upper = self.pop();
                 let lower = self.pop();
@@ -164,7 +168,7 @@ impl<P> Interpreter<P> where P: Program {
                 self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'%' => {
                 let upper = self.pop();
                 let lower = self.pop();
@@ -172,7 +176,7 @@ impl<P> Interpreter<P> where P: Program {
                 self.stack.push(result.0);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'!' => {
                 if self.pop() == 0 {
                     self.stack.push(1);
@@ -181,7 +185,7 @@ impl<P> Interpreter<P> where P: Program {
                 }
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'`' => {
                 let upper = self.pop();
                 let lower = self.pop();
@@ -189,56 +193,70 @@ impl<P> Interpreter<P> where P: Program {
                 self.stack.push(result);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'>' => {
                 self.cursor.dir = Direction::Right;
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'<' => {
                 self.cursor.dir = Direction::Left;
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'^' => {
                 self.cursor.dir = Direction::Up;
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'v' => {
                 self.cursor.dir = Direction::Down;
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'?' => {
-                use rand::seq::SliceRandom;
-                let dir = [Direction::Right, Direction::Left, Direction::Up, Direction::Down].choose(&mut rand::thread_rng());
+                use rand::seq::IndexedRandom;
+                let dir = [
+                    Direction::Right,
+                    Direction::Left,
+                    Direction::Up,
+                    Direction::Down,
+                ]
+                .choose(&mut rand::rng());
                 self.cursor.dir = *(dir.unwrap());
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'_' => {
-                self.cursor.dir = if self.pop() == 0 { Direction::Right } else { Direction::Left };
+                self.cursor.dir = if self.pop() == 0 {
+                    Direction::Right
+                } else {
+                    Direction::Left
+                };
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'|' => {
-                self.cursor.dir = if self.pop() == 0 { Direction::Down } else { Direction::Up };
+                self.cursor.dir = if self.pop() == 0 {
+                    Direction::Down
+                } else {
+                    Direction::Up
+                };
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'"' => {
-                self.cursor.mode = Mode::Stringmode;
+                self.cursor.mode = Mode::Quote;
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b':' => {
                 let value = self.pop();
                 self.stack.push(value);
                 self.stack.push(value);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'\\' => {
                 let upper = self.pop();
                 let lower = self.pop();
@@ -246,48 +264,55 @@ impl<P> Interpreter<P> where P: Program {
                 self.stack.push(lower);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'$' => {
                 self.pop();
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'.' => {
                 let value = self.pop();
                 // Format the number and append a space " "
-                let formatted_val = format!("{} ", value); 
-                self.output_buffer.extend_from_slice(&formatted_val.as_bytes());
+                let formatted_val = format!("{} ", value);
+                self.output_buffer
+                    .extend_from_slice(&formatted_val.as_bytes());
                 self.output_buffer.push(b' ');
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b',' => {
                 let value = self.pop();
                 self.output_buffer.push(value);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'#' => {
                 self.move_auto();
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'g' => {
-                let upper = self.pop() as usize;
-                let lower = self.pop() as usize;
+                let upper = self.pop() as u16;
+                let lower = self.pop() as u16;
                 let value = self.get_opcode(Position { x: lower, y: upper });
                 self.stack.push(value);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'p' => {
-                let upper  = self.pop() as usize;
-                let middle = self.pop() as usize;
-                let lower  = self.pop();
-                self.set_opcode(Position { x: middle, y: upper }, lower);
+                let upper = self.pop() as u16;
+                let middle = self.pop() as u16;
+                let lower = self.pop();
+                self.set_opcode(
+                    Position {
+                        x: middle,
+                        y: upper,
+                    },
+                    lower,
+                );
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'&' => {
                 if let Some(input_char) = self.input_buffer.pop_front() {
                     let input_num = input_char - (b'0' as u8);
@@ -297,7 +322,7 @@ impl<P> Interpreter<P> where P: Program {
                 } else {
                     Status::Waiting
                 }
-            },
+            }
             b'~' => {
                 if let Some(input) = self.input_buffer.pop_front() {
                     self.stack.push(input);
@@ -306,60 +331,58 @@ impl<P> Interpreter<P> where P: Program {
                 } else {
                     Status::Waiting
                 }
-            },
-            b'@' => {
-                Status::Terminated
-            },
+            }
+            b'@' => Status::Terminated,
             b'0' => {
                 self.stack.push(0);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'1' => {
                 self.stack.push(1);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'2' => {
                 self.stack.push(2);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'3' => {
                 self.stack.push(3);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'4' => {
                 self.stack.push(4);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'5' => {
                 self.stack.push(5);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'6' => {
                 self.stack.push(6);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'7' => {
                 self.stack.push(7);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'8' => {
                 self.stack.push(8);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             b'9' => {
                 self.stack.push(9);
                 self.move_auto();
                 Status::Completed
-            },
+            }
             _ => {
                 self.move_auto();
                 Status::Completed

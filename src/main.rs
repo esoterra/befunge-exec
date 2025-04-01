@@ -1,18 +1,18 @@
 mod core;
-mod program;
 mod interpreter;
+mod program;
 #[cfg(test)]
 mod test;
 
-use std::str::from_utf8;
-use std::io::{ stdin, stdout, Write };
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Result;
-use std::collections::HashSet;
+use std::io::{stdin, stdout, Write};
+use std::str::from_utf8;
 
-use crate::core::{ Position };
-use crate::program::{ VecProgram };
-use crate::interpreter::{ Interpreter, Status };
+use crate::core::Position;
+use crate::interpreter::{Interpreter, Status};
+use crate::program::VecProgram;
 
 fn main() {
     match run() {
@@ -51,35 +51,34 @@ fn run() -> Result<()> {
         match bytes.get(0) {
             Some(b's') => {
                 step(&mut interpreter);
-            },
+            }
             Some(b'r') => {
                 step_loop(&mut interpreter, &breakpoints)?;
-            },
+            }
             Some(b'i') => {
                 interpreter.write_input(&bytes[2..]);
-            },
+            }
             Some(b'p') => {
                 println!("{:?}", interpreter.get_current_pos());
-            },
+            }
             Some(b'd') => {
                 println!("{:?}", interpreter);
-            },
+            }
             Some(b'b') => {
                 if let Some(pos) = parse_breakpoint(bytes) {
                     breakpoints.insert(pos);
                 } else {
                     println!("Breakpoint (b) takes 2 arguments");
                 }
-
-            },
+            }
             Some(b'l') => {
                 let line = interpreter.get_line().unwrap_or(&[]);
                 let line_string = from_utf8(line);
                 println!("{:?}", line_string.unwrap());
-            },
+            }
             Some(b'q') => {
                 break;
-            },
+            }
             _ => {}
         }
     }
@@ -97,21 +96,24 @@ fn step(interpreter: &mut Interpreter<VecProgram>) -> Status {
     }
 
     match status {
-        Status::Terminated  => println!("Program terminated"),
-        Status::Waiting     => println!("Waiting for input"),
-        Status::Completed   => {}
+        Status::Terminated => println!("Program terminated"),
+        Status::Waiting => println!("Waiting for input"),
+        Status::Completed => {}
     }
 
     status
 }
 
-fn step_loop(interpreter: &mut Interpreter<VecProgram>, breakpoints: &HashSet<Position>) -> Result<()> {
+fn step_loop(
+    interpreter: &mut Interpreter<VecProgram>,
+    breakpoints: &HashSet<Position>,
+) -> Result<()> {
     loop {
         let status = interpreter.step();
 
         match status {
-            Status::Completed => {},
-            Status::Terminated  => {
+            Status::Completed => {}
+            Status::Terminated => {
                 println!();
                 println!("Program terminated");
                 break;
@@ -145,8 +147,8 @@ fn parse_breakpoint(command: &[u8]) -> Option<Position> {
     if sections.len() == 3 {
         let arg0 = from_utf8(sections[1]).ok()?;
         let arg1 = from_utf8(sections[2]).ok()?;
-        let x: usize = String::from(arg0).parse().ok()?;
-        let y: usize = String::from(arg1).parse().ok()?;
+        let x = String::from(arg0).parse().ok()?;
+        let y = String::from(arg1).parse().ok()?;
 
         Some(Position { x, y })
     } else {
