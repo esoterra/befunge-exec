@@ -3,10 +3,10 @@
 pub struct Position {
     /// The x dimension
     /// Corresponds to the column, indexed left to right.
-    pub x: u16,
+    pub x: u8,
     /// The y dimension
     /// Corresponds to the row, indexed from top to bottom.
-    pub y: u16,
+    pub y: u8,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]

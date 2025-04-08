@@ -1,6 +1,5 @@
 use std::fs::File;
-use std::io::prelude::*;
-use std::io::Result;
+use std::io::{Error as IOError, Read};
 
 use crate::core::{Direction, Position};
 
@@ -8,18 +7,18 @@ use crate::core::{Direction, Position};
 pub trait Program {
     /// Defines where the program wraps around horizontally
     /// This is also 1 larger than the maximum x index
-    fn width(&self) -> u16;
+    fn width(&self) -> u8;
 
     /// Defines where the program wraps around vertically
     /// This is also 1 larger than the maximum y index
-    fn height(&self) -> u16;
+    fn height(&self) -> u8;
 
     /// Retrieve the opcode located at a position
     /// Out of bound gets must return b' '
     fn get(&self, pos: Position) -> u8;
 
     /// Retrieve the specified row of the program
-    fn get_line(&self, row_index: u16) -> Option<&[u8]>;
+    fn get_line(&self, y: u8) -> Option<&[u8]>;
 
     /// Create a new position from a position and direction
     /// handling loop around at the maximum and minimum
@@ -51,88 +50,113 @@ pub trait Program {
 // A program that stores its data in vectors
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct VecProgram {
-    data: Vec<Vec<u8>>,
-    width: usize,
+    data: Vec<u8>,
+    line_ends: Vec<usize>,
 }
 
-impl VecProgram {
-    pub fn from_file(input: File) -> Result<Self> {
-        let mut input_file = input;
-        let mut file_str = String::new();
-
-        input_file.read_to_string(&mut file_str)?;
-
-        let file_data = file_str.into_bytes();
+impl TryFrom<File> for VecProgram {
+    type Error = IOError;
+    
+    fn try_from(mut file: File) -> std::result::Result<Self, Self::Error> {
         let mut data = Vec::new();
-
-        let mut start = 0;
-        let mut width = 0;
-
-        for (i, c) in file_data.iter().enumerate() {
-            if *c == b'\n' {
-                let end = i;
-                let row_width = end - start;
-
-                if row_width > width {
-                    width = row_width;
-                }
-
-                data.push(Vec::from(&file_data[start..end]));
-
-                start = end + 1;
-            }
-        }
-
-        if let Some(last_char) = file_data.last() {
-            if *last_char != b'\n' {
-                data.push(Vec::from(&file_data[start..]));
-
-                let row_width = file_data.len() - start;
-                if row_width > width {
-                    width = row_width;
-                }
-            }
-        }
-
-        Ok(VecProgram { data, width })
+        file.read_to_end(&mut data)?;
+        Ok(data.into())
     }
+}
 
-    #[cfg(test)]
-    pub fn from_vec(input: Vec<Vec<u8>>) -> Self {
-        let mut width = 0;
+impl From<Vec<u8>> for VecProgram {
+    fn from(data: Vec<u8>) -> Self {
+        let mut line_ends = Vec::new();
+        let mut last_feed = None;
 
-        for row in input.iter() {
-            if row.len() > width {
-                width = row.len();
+        for (i, c) in data.iter().enumerate() {
+            if *c == b'\n' {
+                line_ends.push(i);
+                last_feed = Some(i);
             }
         }
 
-        VecProgram { data: input, width }
+        if let Some(last) = last_feed {
+            if last != data.len() - 1 {
+                line_ends.push(data.len())
+            }
+        } else {
+            line_ends.push(data.len())
+        }
+
+        VecProgram { data, line_ends }
     }
 }
 
 impl Program for VecProgram {
-    fn width(&self) -> u16 {
-        self.width as u16
+    fn width(&self) -> u8 {
+        255
     }
 
-    fn height(&self) -> u16 {
-        self.data.len() as u16
+    fn height(&self) -> u8 {
+        255
     }
 
     fn get(&self, pos: Position) -> u8 {
-        if let Some(row) = self.data.get(pos.y as usize) {
-            if let Some(cell) = row.get(pos.x as usize) {
-                *cell
-            } else {
-                b' '
-            }
+        *self.get_line(pos.y).unwrap_or(&[]).get(pos.x as usize).unwrap_or(&b' ')
+    }
+
+    fn get_line(&self, y: u8) -> Option<&[u8]> {
+        let y = y as usize;
+        if y >= self.line_ends.len() {
+            None
         } else {
-            b' '
+            let lower = match y {
+                0 => 0,
+                _ => self.line_ends[y-1] + 1,
+            };
+            let upper = self.line_ends[y];
+            Some(&self.data[lower..upper])
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vec_program_get_line() {
+        let program = "a\nbb\nccc\ndddd\n".to_owned().into_bytes();
+        let program = VecProgram::from(program);
+        assert_eq!(Some(b"a".as_slice()), program.get_line(0));
+        assert_eq!(Some(b"bb".as_slice()), program.get_line(1));
+        assert_eq!(Some(b"ccc".as_slice()), program.get_line(2));
+        assert_eq!(Some(b"dddd".as_slice()), program.get_line(3));
+        for y in 4..255 {
+            assert_eq!(None, program.get_line(y));
         }
     }
 
-    fn get_line(&self, index: u16) -> Option<&[u8]> {
-        self.data.get(index as usize).map(|row| &row[..])
+    #[test]
+    fn test_vec_program_get() {
+        let program = "a\nbb\nccc\ndddd\n".to_owned().into_bytes();
+        let program = VecProgram::from(program);
+        let rows = [
+            (0, b'a', 1),
+            (1, b'b', 2),
+            (2, b'c', 3),
+            (3, b'd', 4),
+        ];
+        // main rows
+        for (y, cell, n) in rows.into_iter() {
+            for x in 0..n {
+                assert_eq!(cell, program.get(Position { x, y }));
+            }
+            for x in n..255 {
+                assert_eq!(b' ', program.get(Position { x, y }));
+            }
+        }
+        // rest
+        for y in 4..255 {
+            for x in 0..255 {
+                assert_eq!(b' ', program.get(Position { x, y }));
+            }
+        }
     }
 }

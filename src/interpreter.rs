@@ -1,21 +1,20 @@
-use std::collections::{HashMap, VecDeque};
-use std::mem::replace;
+use std::collections::HashMap;
 
 use crate::core::{Cursor, Direction, Mode, Position};
+use crate::io::IO;
 use crate::program::Program;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 /// An Interpreter represents a step by step executor for befunge code.
 /// It contains a program, all necessary state, and IO buffers.
-pub struct Interpreter<P: Program> {
+pub struct Interpreter<P: Program, IOImpl: IO> {
     program: P,
     overlay: HashMap<Position, u8>,
 
     cursor: Cursor,
     stack: Vec<u8>,
 
-    input_buffer: VecDeque<u8>,
-    output_buffer: Vec<u8>,
+    io: IOImpl,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -31,13 +30,14 @@ pub enum Status {
     Terminated,
 }
 
-impl<P> From<P> for Interpreter<P>
+impl<P, IOImpl> Interpreter<P, IOImpl>
 where
     P: Program,
+    IOImpl: IO,
 {
     /// Creates a new Interpreter that executes
-    /// the provided program
-    fn from(program: P) -> Self {
+    /// the provided program with the provided io.
+    pub fn new(program: P, io: IOImpl) -> Self {
         let cursor = Cursor {
             pos: Position { x: 0, y: 0 },
             dir: Direction::Right,
@@ -49,30 +49,28 @@ where
             overlay: HashMap::new(),
             cursor,
             stack: Vec::new(),
-            input_buffer: VecDeque::new(),
-            output_buffer: Vec::new(),
+            io,
         }
     }
-}
 
-impl<P> Interpreter<P>
-where
-    P: Program,
-{
+    pub fn io(&mut self) -> &mut IOImpl {
+        &mut self.io
+    }
+
     /// Get the position of the cursor
-    pub fn get_current_pos(&self) -> Position {
+    pub fn current_position(&self) -> Position {
         self.cursor.pos
     }
 
     /// Get the direction of teh cursor
     #[cfg(test)]
-    pub fn get_current_dir(&self) -> Direction {
+    pub fn current_direction(&self) -> Direction {
         self.cursor.dir
     }
 
     /// Get the current stack contents
     #[cfg(test)]
-    pub fn get_stack(&self) -> &[u8] {
+    pub fn stack(&self) -> &[u8] {
         &self.stack[..]
     }
 
@@ -93,19 +91,6 @@ where
     /// Retrieves the current line the interpreter is on
     pub fn get_line(&self) -> Option<&[u8]> {
         self.program.get_line(self.cursor.pos.y)
-    }
-
-    /// Appends data to the input buffer
-    pub fn write_input(&mut self, input: &[u8]) {
-        for byte in input {
-            self.input_buffer.push_back(*byte);
-        }
-    }
-
-    /// Reads and empties the output of the Interpreter
-    pub fn read_output(&mut self) -> Vec<u8> {
-        let result = replace(&mut self.output_buffer, Vec::new());
-        result
     }
 
     fn move_auto(&mut self) {
@@ -138,12 +123,11 @@ where
     fn step_unquoted(&mut self, opcode: u8) -> Status {
         use std::num::Wrapping;
 
-        match opcode {
+        let status = match opcode {
             b'+' => {
                 let (e1, e2) = (self.pop(), self.pop());
                 let result = Wrapping(e2) + Wrapping(e1);
                 self.stack.push(result.0);
-                self.move_auto();
                 Status::Completed
             }
             b'-' => {
@@ -151,14 +135,12 @@ where
                 let lower = self.pop();
                 let result = Wrapping(lower) - Wrapping(upper);
                 self.stack.push(result.0);
-                self.move_auto();
                 Status::Completed
             }
             b'*' => {
                 let (e1, e2) = (self.pop(), self.pop());
                 let result = Wrapping(e2) * Wrapping(e1);
                 self.stack.push(result.0);
-                self.move_auto();
                 Status::Completed
             }
             b'/' => {
@@ -166,7 +148,6 @@ where
                 let lower = self.pop();
                 let result = Wrapping(lower) / Wrapping(upper);
                 self.stack.push(result.0);
-                self.move_auto();
                 Status::Completed
             }
             b'%' => {
@@ -174,16 +155,12 @@ where
                 let lower = self.pop();
                 let result = Wrapping(lower) % Wrapping(upper);
                 self.stack.push(result.0);
-                self.move_auto();
                 Status::Completed
             }
             b'!' => {
-                if self.pop() == 0 {
-                    self.stack.push(1);
-                } else {
-                    self.stack.push(0);
-                }
-                self.move_auto();
+                let value = self.pop();
+                let result = if value == 0 { 1 } else { 0 };
+                self.stack.push(result);
                 Status::Completed
             }
             b'`' => {
@@ -191,27 +168,22 @@ where
                 let lower = self.pop();
                 let result = if lower > upper { 1 } else { 0 };
                 self.stack.push(result);
-                self.move_auto();
                 Status::Completed
             }
             b'>' => {
                 self.cursor.dir = Direction::Right;
-                self.move_auto();
                 Status::Completed
             }
             b'<' => {
                 self.cursor.dir = Direction::Left;
-                self.move_auto();
                 Status::Completed
             }
             b'^' => {
                 self.cursor.dir = Direction::Up;
-                self.move_auto();
                 Status::Completed
             }
             b'v' => {
                 self.cursor.dir = Direction::Down;
-                self.move_auto();
                 Status::Completed
             }
             b'?' => {
@@ -224,7 +196,6 @@ where
                 ]
                 .choose(&mut rand::rng());
                 self.cursor.dir = *(dir.unwrap());
-                self.move_auto();
                 Status::Completed
             }
             b'_' => {
@@ -233,7 +204,6 @@ where
                 } else {
                     Direction::Left
                 };
-                self.move_auto();
                 Status::Completed
             }
             b'|' => {
@@ -242,19 +212,16 @@ where
                 } else {
                     Direction::Up
                 };
-                self.move_auto();
                 Status::Completed
             }
             b'"' => {
                 self.cursor.mode = Mode::Quote;
-                self.move_auto();
                 Status::Completed
             }
             b':' => {
                 let value = self.pop();
                 self.stack.push(value);
                 self.stack.push(value);
-                self.move_auto();
                 Status::Completed
             }
             b'\\' => {
@@ -262,46 +229,37 @@ where
                 let lower = self.pop();
                 self.stack.push(upper);
                 self.stack.push(lower);
-                self.move_auto();
                 Status::Completed
             }
             b'$' => {
                 self.pop();
-                self.move_auto();
                 Status::Completed
             }
             b'.' => {
-                let value = self.pop();
-                // Format the number and append a space " "
-                let formatted_val = format!("{} ", value);
-                self.output_buffer
-                    .extend_from_slice(&formatted_val.as_bytes());
-                self.output_buffer.push(b' ');
-                self.move_auto();
+                let number_string = format!("{} ", self.pop());
+                let buf = number_string.as_bytes();
+                self.io.write(buf);
                 Status::Completed
             }
             b',' => {
-                let value = self.pop();
-                self.output_buffer.push(value);
-                self.move_auto();
+                let buf = &[self.pop()];
+                self.io.write(buf);
                 Status::Completed
             }
             b'#' => {
                 self.move_auto();
-                self.move_auto();
                 Status::Completed
             }
             b'g' => {
-                let upper = self.pop() as u16;
-                let lower = self.pop() as u16;
+                let upper = self.pop();
+                let lower = self.pop();
                 let value = self.get_opcode(Position { x: lower, y: upper });
                 self.stack.push(value);
-                self.move_auto();
                 Status::Completed
             }
             b'p' => {
-                let upper = self.pop() as u16;
-                let middle = self.pop() as u16;
+                let upper = self.pop();
+                let middle = self.pop();
                 let lower = self.pop();
                 self.set_opcode(
                     Position {
@@ -310,23 +268,19 @@ where
                     },
                     lower,
                 );
-                self.move_auto();
                 Status::Completed
             }
             b'&' => {
-                if let Some(input_char) = self.input_buffer.pop_front() {
-                    let input_num = input_char - (b'0' as u8);
-                    self.stack.push(input_num);
-                    self.move_auto();
+                if let Some(input_number) = self.io.read_number() {
+                    self.stack.push(input_number);
                     Status::Completed
                 } else {
                     Status::Waiting
                 }
             }
             b'~' => {
-                if let Some(input) = self.input_buffer.pop_front() {
+                if let Some(input) = self.io.read_byte() {
                     self.stack.push(input);
-                    self.move_auto();
                     Status::Completed
                 } else {
                     Status::Waiting
@@ -335,58 +289,57 @@ where
             b'@' => Status::Terminated,
             b'0' => {
                 self.stack.push(0);
-                self.move_auto();
                 Status::Completed
             }
             b'1' => {
                 self.stack.push(1);
-                self.move_auto();
                 Status::Completed
             }
             b'2' => {
                 self.stack.push(2);
-                self.move_auto();
                 Status::Completed
             }
             b'3' => {
                 self.stack.push(3);
-                self.move_auto();
                 Status::Completed
             }
             b'4' => {
                 self.stack.push(4);
-                self.move_auto();
                 Status::Completed
             }
             b'5' => {
                 self.stack.push(5);
-                self.move_auto();
                 Status::Completed
             }
             b'6' => {
                 self.stack.push(6);
-                self.move_auto();
                 Status::Completed
             }
             b'7' => {
                 self.stack.push(7);
-                self.move_auto();
                 Status::Completed
             }
             b'8' => {
                 self.stack.push(8);
-                self.move_auto();
                 Status::Completed
             }
             b'9' => {
                 self.stack.push(9);
-                self.move_auto();
                 Status::Completed
             }
-            _ => {
-                self.move_auto();
+            b' ' => {
                 Status::Completed
             }
+            op => {
+                eprintln!("Invalid opcode: {}", op);
+                std::process::exit(1);
+            }
+        };
+        match status {
+            Status::Completed => self.move_auto(),
+            Status::Waiting => {},
+            Status::Terminated => {},
         }
+        status
     }
 }
