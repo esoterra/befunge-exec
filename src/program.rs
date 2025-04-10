@@ -56,7 +56,7 @@ pub struct VecProgram {
 
 impl TryFrom<File> for VecProgram {
     type Error = IOError;
-    
+
     fn try_from(mut file: File) -> std::result::Result<Self, Self::Error> {
         let mut data = Vec::new();
         file.read_to_end(&mut data)?;
@@ -98,7 +98,11 @@ impl Program for VecProgram {
     }
 
     fn get(&self, pos: Position) -> u8 {
-        *self.get_line(pos.y).unwrap_or(&[]).get(pos.x as usize).unwrap_or(&b' ')
+        *self
+            .get_line(pos.y)
+            .unwrap_or(&[])
+            .get(pos.x as usize)
+            .unwrap_or(&b' ')
     }
 
     fn get_line(&self, y: u8) -> Option<&[u8]> {
@@ -108,7 +112,7 @@ impl Program for VecProgram {
         } else {
             let lower = match y {
                 0 => 0,
-                _ => self.line_ends[y-1] + 1,
+                _ => self.line_ends[y - 1] + 1,
             };
             let upper = self.line_ends[y];
             Some(&self.data[lower..upper])
@@ -137,12 +141,7 @@ mod tests {
     fn test_vec_program_get() {
         let program = "a\nbb\nccc\ndddd\n".to_owned().into_bytes();
         let program = VecProgram::from(program);
-        let rows = [
-            (0, b'a', 1),
-            (1, b'b', 2),
-            (2, b'c', 3),
-            (3, b'd', 4),
-        ];
+        let rows = [(0, b'a', 1), (1, b'b', 2), (2, b'c', 3), (3, b'd', 4)];
         // main rows
         for (y, cell, n) in rows.into_iter() {
             for x in 0..n {

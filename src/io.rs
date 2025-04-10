@@ -16,7 +16,10 @@ pub struct StdIO {
 
 impl Default for StdIO {
     fn default() -> Self {
-        Self { input: Default::default(), stdout: stdout() }
+        Self {
+            input: Default::default(),
+            stdout: stdout(),
+        }
     }
 }
 
@@ -71,9 +74,14 @@ impl InputBuffer {
     }
 
     fn skip_and_shift(&mut self, skip: usize) {
-        assert!(skip <= self.length, "Tried to skip ({}) more than was available ({})", skip, self.length);
-        let start = self.offset+skip;
-        let end = self.offset+self.length;
+        assert!(
+            skip <= self.length,
+            "Tried to skip ({}) more than was available ({})",
+            skip,
+            self.length
+        );
+        let start = self.offset + skip;
+        let end = self.offset + self.length;
         if start != end {
             let src = start..end;
             self.buffer.copy_within(src, 0);
@@ -109,7 +117,7 @@ impl IO for StdIO {
     fn read_byte(&mut self) -> Option<u8> {
         self.input.read_byte()
     }
-    
+
     fn read_number(&mut self) -> Option<u8> {
         if self.input.is_empty() {
             let n = self.input.read_more();
@@ -123,13 +131,13 @@ impl IO for StdIO {
                 Ok((offset, num)) => {
                     self.input.skip_and_shift(offset);
                     return Some(num);
-                },
+                }
                 Err(skippable) => {
                     self.input.skip_and_shift(skippable);
                     if self.input.read_more() == 0 {
                         return None;
                     }
-                },
+                }
             }
         }
     }
@@ -168,7 +176,7 @@ impl IO for VecIO {
     fn read_byte(&mut self) -> Option<u8> {
         self.input_buffer.pop_front()
     }
-    
+
     fn read_number(&mut self) -> Option<u8> {
         let iter = self.input_buffer.iter().copied();
         let (offset, byte) = try_read_number(iter).ok()?;
@@ -183,7 +191,7 @@ impl IO for VecIO {
     }
 }
 
-// Either reads a number from the iterator successfully 
+// Either reads a number from the iterator successfully
 // returning the number of bytes read and the value of the number
 // or returns that a number could not be read and how many bytes can be skipped.
 fn try_read_number(iter: impl Iterator<Item = u8>) -> Result<(usize, u8), usize> {
@@ -194,7 +202,7 @@ fn try_read_number(iter: impl Iterator<Item = u8>) -> Result<(usize, u8), usize>
         if matches!(byte, b'0'..=b'9') {
             let value = byte - b'0';
             if let Some(new_num) = try_combine(num, value) {
-                offset = i+1;
+                offset = i + 1;
                 num = new_num;
             } else {
                 return Ok((offset, num));
@@ -209,14 +217,14 @@ fn try_read_number(iter: impl Iterator<Item = u8>) -> Result<(usize, u8), usize>
 fn base_number(iter: &mut impl Iterator<Item = (usize, u8)>) -> Result<(usize, u8), usize> {
     let mut skippable = 0;
     while let Some((i, byte)) = iter.next() {
-        let n = i+1;
+        let n = i + 1;
         if matches!(byte, b'0'..=b'9') {
             let value = byte - b'0';
             return Ok((n, value));
         } else {
             skippable = n;
         }
-    };
+    }
     Err(skippable)
 }
 
@@ -289,7 +297,7 @@ mod tests {
 
         for i in 0..24 {
             for j in 0..9 {
-                assert_eq!(Some(10*i + j), try_combine(i, j));
+                assert_eq!(Some(10 * i + j), try_combine(i, j));
             }
         }
 

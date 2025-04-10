@@ -327,9 +327,7 @@ where
                 self.stack.push(9);
                 Status::Completed
             }
-            b' ' => {
-                Status::Completed
-            }
+            b' ' => Status::Completed,
             op => {
                 eprintln!("Invalid opcode: {}", op);
                 std::process::exit(1);
@@ -337,8 +335,8 @@ where
         };
         match status {
             Status::Completed => self.move_auto(),
-            Status::Waiting => {},
-            Status::Terminated => {},
+            Status::Waiting => {}
+            Status::Terminated => {}
         }
         status
     }

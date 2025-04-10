@@ -3,6 +3,8 @@ mod debug;
 mod interpreter;
 mod io;
 mod program;
+mod timeline;
+mod tui;
 
 use std::cmp::min;
 use std::fs::File;
@@ -28,6 +30,8 @@ enum Command {
     Run { path: PathBuf },
 
     Debug { path: PathBuf },
+
+    Tui,
 }
 
 fn main() {
@@ -35,6 +39,10 @@ fn main() {
     let result = match cli.command {
         Command::Run { path } => run(path),
         Command::Debug { path } => debug::debug(path),
+        Command::Tui => {
+            tui::print_tui(tui::FocusedTab::Console).unwrap();
+            std::process::exit(0);
+        }
     };
     if let Err(error) = result {
         eprintln!("{:?}", error);
@@ -54,13 +62,13 @@ fn run(path: PathBuf) -> Result<()> {
         match status {
             Status::Completed => {
                 wait_count = 0;
-            },
+            }
             Status::Waiting => {
                 wait_count += 1;
                 let wait = min(wait_count, 500);
                 let wait = Duration::from_millis(wait);
                 sleep(wait);
-            },
+            }
             Status::Terminated => {
                 return Ok(());
             }
@@ -149,7 +157,7 @@ mod tests {
         let io = VecIO::default();
         let mut interpreter = Interpreter::new(program, io);
 
-        let sequence= [
+        let sequence = [
             (0, 1, Direction::Down),
             (1, 1, Direction::Right),
             (1, 0, Direction::Up),
