@@ -1,20 +1,38 @@
 use std::collections::HashMap;
 
+use grid::Grid;
+
 use crate::core::{Cursor, Direction, Mode, Position};
 use crate::io::IO;
-use crate::program::Program;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 /// An Interpreter represents a step by step executor for befunge code.
 /// It contains a program, all necessary state, and IO buffers.
-pub struct Interpreter<P: Program, IOImpl: IO> {
-    program: P,
-    overlay: HashMap<Position, u8>,
+pub struct Interpreter<IOImpl> {
+    grid: Grid<Cell>,
+    map: HashMap<Position, Cell>,
+    rows: usize,
+    cols: usize,
 
     cursor: Cursor,
-    stack: Vec<u8>,
+    stack: Vec<Cell>,
 
     io: IOImpl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cell(pub u8);
+
+impl Default for Cell {
+    fn default() -> Self {
+        Self(b' ')
+    }
+}
+
+impl From<u8> for Cell {
+    fn from(value: u8) -> Self {
+        Cell(value)
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -30,23 +48,70 @@ pub enum Status {
     Terminated,
 }
 
-impl<P, IOImpl> Interpreter<P, IOImpl>
+pub trait Record {
+    fn replace(&mut self, pos: Position, old: u8, new: u8);
+    fn pop(&mut self, value: u8);
+    fn pop_bottom(&mut self);
+    fn push(&mut self, value: u8);
+    fn enter_quote(&mut self);
+    fn exit_quote(&mut self);
+}
+
+impl Record for () {
+    fn replace(&mut self, _pos: Position, _old: u8, _new: u8) {}
+    fn pop(&mut self, _value: u8) {}
+    fn pop_bottom(&mut self) {}
+    fn push(&mut self, _value: u8) {}
+    fn enter_quote(&mut self) {}
+    fn exit_quote(&mut self) {}
+}
+
+impl<IOImpl> Interpreter<IOImpl>
 where
-    P: Program,
     IOImpl: IO,
 {
     /// Creates a new Interpreter that executes
     /// the provided program with the provided io.
-    pub fn new(program: P, io: IOImpl) -> Self {
+    pub fn new(program: &Vec<u8>, io: IOImpl) -> Self {
         let cursor = Cursor {
             pos: Position { x: 0, y: 0 },
             dir: Direction::Right,
             mode: Mode::Normal,
         };
 
+        let mut cols = 0;
+        let mut rows = 0;
+        let mut last_line = 0;
+        for (i, c) in program.iter().enumerate() {
+            if *c == b'\n' {
+                cols = std::cmp::max(i - last_line, cols);
+                last_line = i + 1;
+                rows += 1;
+            }
+        }
+        if last_line != program.len() {
+            cols = std::cmp::max(program.len() - last_line, cols);
+            rows += 1;
+        }
+
+        let mut grid = Grid::new(rows, cols);
+
+        let mut last_line = 0;
+        let mut row = 0;
+        for (i, c) in program.iter().enumerate() {
+            if *c == b'\n' {
+                last_line = i + 1;
+                row += 1;
+                continue;
+            }
+            grid[(row, i - last_line)] = Cell(*c);
+        }
+
         Interpreter {
-            program: program,
-            overlay: HashMap::new(),
+            grid,
+            map: HashMap::new(),
+            cols,
+            rows,
             cursor,
             stack: Vec::new(),
             io,
@@ -63,111 +128,159 @@ where
     }
 
     /// Get the direction of teh cursor
-    #[cfg(test)]
     pub fn current_direction(&self) -> Direction {
         self.cursor.dir
     }
 
     /// Get the current stack contents
     #[cfg(test)]
-    pub fn stack(&self) -> &[u8] {
+    pub fn stack(&self) -> &[Cell] {
         &self.stack[..]
     }
 
-    /// Retrieves the opcode located at a position in the program
-    pub fn get_opcode(&self, pos: Position) -> u8 {
-        if let Some(overlay_val) = self.overlay.get(&pos) {
-            *overlay_val
+    /// Retrieves the cell located at a position in the program
+    pub fn get_cell(&self, pos: Position) -> Cell {
+        let x = pos.x as usize;
+        let y = pos.y as usize;
+        if x > self.grid.cols() || y > self.grid.rows() {
+            self.map.get(&pos).copied().unwrap_or_default()
         } else {
-            self.program.get(pos)
+            self.grid.get(y, x).copied().unwrap_or_default()
         }
     }
 
     /// Updates the opcode at a specific position in the program
-    fn set_opcode(&mut self, pos: Position, opcode: u8) {
-        self.overlay.insert(pos, opcode);
-    }
-
-    /// Retrieves the current line the interpreter is on
-    pub fn get_line(&self) -> Option<&[u8]> {
-        self.program.get_line(self.cursor.pos.y)
+    fn set_cell(&mut self, pos: Position, cell: Cell, recorder: &mut impl Record) {
+        let old = self.get_cell(pos);
+        recorder.replace(pos, old.0, cell.0);
+        let x = pos.x as usize;
+        let y = pos.y as usize;
+        if x >= self.grid.cols() || y >= self.grid.rows() {
+            self.map.insert(pos, cell);
+        } else {
+            self.grid[(y, x)] = cell;
+        }
+        self.cols = std::cmp::max(self.cols, x + 1);
+        self.rows = std::cmp::max(self.rows, y + 1);
     }
 
     fn move_auto(&mut self) {
-        self.cursor.pos = self.program.move_pos(self.cursor.pos, self.cursor.dir);
+        let Position { x, y } = self.current_position();
+        let dir = self.current_direction();
+        let cols = self.cols as u8;
+        let rows = self.rows as u8;
+        self.cursor.pos = match dir {
+            Direction::Right => {
+                let x = x + 1;
+                let x = if x >= cols { 0 } else { x };
+                Position { x, y }
+            }
+            Direction::Left => {
+                let x = if x == 0 { cols } else { x - 1 };
+                Position { x, y }
+            }
+            Direction::Up => {
+                let y = if y == 0 { rows } else { y - 1 };
+                Position { x, y }
+            }
+            Direction::Down => {
+                let y = y + 1;
+                let y = if y >= rows { 0 } else { y };
+                Position { x, y }
+            }
+        };
     }
 
-    fn pop(&mut self) -> u8 {
-        self.stack.pop().unwrap_or(0)
-    }
-
-    /// Interprets the next command
-    pub fn step(&mut self) -> Status {
-        let opcode = self.get_opcode(self.cursor.pos);
-
-        match self.cursor.mode {
-            Mode::Quote => self.step_quoted(opcode),
-            Mode::Normal => self.step_unquoted(opcode),
+    fn pop(&mut self, recorder: &mut impl Record) -> u8 {
+        match self.stack.pop() {
+            Some(top) => {
+                recorder.pop(top.0);
+                top.0
+            }
+            None => {
+                recorder.pop_bottom();
+                0
+            }
         }
     }
 
-    fn step_quoted(&mut self, opcode: u8) -> Status {
-        match opcode {
-            b'"' => self.cursor.mode = Mode::Normal,
-            _ => self.stack.push(opcode),
+    fn push(&mut self, cell: u8, recorder: &mut impl Record) {
+        recorder.push(cell);
+        self.stack.push(Cell(cell));
+    }
+
+    /// Interprets the next command
+    pub fn step(&mut self, recorder: &mut impl Record) -> Status {
+        let cell = self.get_cell(self.cursor.pos);
+
+        match self.cursor.mode {
+            Mode::Quote => self.step_quoted(cell, recorder),
+            Mode::Normal => self.step_unquoted(cell, recorder),
+        }
+    }
+
+    fn step_quoted(&mut self, cell: Cell, recorder: &mut impl Record) -> Status {
+        match cell {
+            Cell(b'"') => {
+                self.cursor.mode = Mode::Normal;
+                recorder.exit_quote();
+            }
+            _ => self.stack.push(cell),
         }
         self.move_auto();
         Status::Completed
     }
 
-    fn step_unquoted(&mut self, opcode: u8) -> Status {
+    fn step_unquoted(&mut self, cell: Cell, recorder: &mut impl Record) -> Status {
         use std::num::Wrapping;
 
-        let status = match opcode {
+        let status = match cell.0 {
             b'+' => {
-                let (e1, e2) = (self.pop(), self.pop());
+                let (e1, e2) = (self.pop(recorder), self.pop(recorder));
+                recorder.pop(e1);
+                recorder.pop(e2);
                 let result = Wrapping(e2) + Wrapping(e1);
-                self.stack.push(result.0);
+                self.push(result.0, recorder);
                 Status::Completed
             }
             b'-' => {
-                let upper = self.pop();
-                let lower = self.pop();
+                let upper = self.pop(recorder);
+                let lower = self.pop(recorder);
                 let result = Wrapping(lower) - Wrapping(upper);
-                self.stack.push(result.0);
+                self.push(result.0, recorder);
                 Status::Completed
             }
             b'*' => {
-                let (e1, e2) = (self.pop(), self.pop());
+                let (e1, e2) = (self.pop(recorder), self.pop(recorder));
                 let result = Wrapping(e2) * Wrapping(e1);
-                self.stack.push(result.0);
+                self.push(result.0, recorder);
                 Status::Completed
             }
             b'/' => {
-                let upper = self.pop();
-                let lower = self.pop();
+                let upper = self.pop(recorder);
+                let lower = self.pop(recorder);
                 let result = Wrapping(lower) / Wrapping(upper);
-                self.stack.push(result.0);
+                self.push(result.0, recorder);
                 Status::Completed
             }
             b'%' => {
-                let upper = self.pop();
-                let lower = self.pop();
+                let upper = self.pop(recorder);
+                let lower = self.pop(recorder);
                 let result = Wrapping(lower) % Wrapping(upper);
-                self.stack.push(result.0);
+                self.push(result.0, recorder);
                 Status::Completed
             }
             b'!' => {
-                let value = self.pop();
+                let value = self.pop(recorder);
                 let result = if value == 0 { 1 } else { 0 };
-                self.stack.push(result);
+                self.push(result, recorder);
                 Status::Completed
             }
             b'`' => {
-                let upper = self.pop();
-                let lower = self.pop();
+                let upper = self.pop(recorder);
+                let lower = self.pop(recorder);
                 let result = if lower > upper { 1 } else { 0 };
-                self.stack.push(result);
+                self.push(result, recorder);
                 Status::Completed
             }
             b'>' => {
@@ -199,7 +312,7 @@ where
                 Status::Completed
             }
             b'_' => {
-                self.cursor.dir = if self.pop() == 0 {
+                self.cursor.dir = if self.pop(recorder) == 0 {
                     Direction::Right
                 } else {
                     Direction::Left
@@ -207,7 +320,7 @@ where
                 Status::Completed
             }
             b'|' => {
-                self.cursor.dir = if self.pop() == 0 {
+                self.cursor.dir = if self.pop(recorder) == 0 {
                     Direction::Down
                 } else {
                     Direction::Up
@@ -216,33 +329,34 @@ where
             }
             b'"' => {
                 self.cursor.mode = Mode::Quote;
+                recorder.enter_quote();
                 Status::Completed
             }
             b':' => {
-                let value = self.pop();
-                self.stack.push(value);
-                self.stack.push(value);
+                let value = self.pop(recorder);
+                self.push(value, recorder);
+                self.push(value, recorder);
                 Status::Completed
             }
             b'\\' => {
-                let upper = self.pop();
-                let lower = self.pop();
-                self.stack.push(upper);
-                self.stack.push(lower);
+                let upper = self.pop(recorder);
+                let lower = self.pop(recorder);
+                self.push(upper, recorder);
+                self.push(lower, recorder);
                 Status::Completed
             }
             b'$' => {
-                self.pop();
+                self.pop(recorder);
                 Status::Completed
             }
             b'.' => {
-                let number_string = format!("{} ", self.pop());
+                let number_string = format!("{} ", self.pop(recorder));
                 let buf = number_string.as_bytes();
                 self.io.write(buf);
                 Status::Completed
             }
             b',' => {
-                let buf = &[self.pop()];
+                let buf = &[self.pop(recorder)];
                 self.io.write(buf);
                 Status::Completed
             }
@@ -251,28 +365,29 @@ where
                 Status::Completed
             }
             b'g' => {
-                let upper = self.pop();
-                let lower = self.pop();
-                let value = self.get_opcode(Position { x: lower, y: upper });
-                self.stack.push(value);
+                let upper = self.pop(recorder);
+                let lower = self.pop(recorder);
+                let value = self.get_cell(Position { x: lower, y: upper });
+                self.push(value.0, recorder);
                 Status::Completed
             }
             b'p' => {
-                let upper = self.pop();
-                let middle = self.pop();
-                let lower = self.pop();
-                self.set_opcode(
+                let upper = self.pop(recorder);
+                let middle = self.pop(recorder);
+                let lower = self.pop(recorder);
+                self.set_cell(
                     Position {
                         x: middle,
                         y: upper,
                     },
-                    lower,
+                    Cell(lower),
+                    recorder,
                 );
                 Status::Completed
             }
             b'&' => {
                 if let Some(input_number) = self.io.read_number() {
-                    self.stack.push(input_number);
+                    self.push(input_number, recorder);
                     Status::Completed
                 } else {
                     Status::Waiting
@@ -280,7 +395,7 @@ where
             }
             b'~' => {
                 if let Some(input) = self.io.read_byte() {
-                    self.stack.push(input);
+                    self.push(input, recorder);
                     Status::Completed
                 } else {
                     Status::Waiting
@@ -288,43 +403,43 @@ where
             }
             b'@' => Status::Terminated,
             b'0' => {
-                self.stack.push(0);
+                self.push(0, recorder);
                 Status::Completed
             }
             b'1' => {
-                self.stack.push(1);
+                self.push(1, recorder);
                 Status::Completed
             }
             b'2' => {
-                self.stack.push(2);
+                self.push(2, recorder);
                 Status::Completed
             }
             b'3' => {
-                self.stack.push(3);
+                self.push(3, recorder);
                 Status::Completed
             }
             b'4' => {
-                self.stack.push(4);
+                self.push(4, recorder);
                 Status::Completed
             }
             b'5' => {
-                self.stack.push(5);
+                self.push(5, recorder);
                 Status::Completed
             }
             b'6' => {
-                self.stack.push(6);
+                self.push(6, recorder);
                 Status::Completed
             }
             b'7' => {
-                self.stack.push(7);
+                self.push(7, recorder);
                 Status::Completed
             }
             b'8' => {
-                self.stack.push(8);
+                self.push(8, recorder);
                 Status::Completed
             }
             b'9' => {
-                self.stack.push(9);
+                self.push(9, recorder);
                 Status::Completed
             }
             b' ' => Status::Completed,

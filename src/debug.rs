@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::fs::File;
+use std::fs;
 use std::io::Result;
 use std::io::{Write, stdin, stdout};
 use std::path::PathBuf;
@@ -8,17 +8,15 @@ use std::str::from_utf8;
 use crate::core::Position;
 use crate::interpreter::{Interpreter, Status as InterpreterStatus};
 use crate::io::VecIO;
-use crate::program::VecProgram;
 
-type DebugInterpreter = Interpreter<VecProgram, VecIO>;
+type DebugInterpreter = Interpreter<VecIO>;
 
 pub fn debug(path: PathBuf) -> Result<()> {
     let input = stdin();
 
-    let file = File::open(&path)?;
-    let program = VecProgram::try_from(file)?;
+    let program = fs::read(&path)?;
     let io = VecIO::default();
-    let mut interpreter = Interpreter::new(program, io);
+    let mut interpreter = Interpreter::new(&program, io);
     let mut breakpoints = HashSet::new();
 
     loop {
@@ -60,12 +58,6 @@ pub fn debug(path: PathBuf) -> Result<()> {
                     println!("Breakpoint (b) takes 2 arguments");
                 }
             }
-            Some(b'l') => {
-                // Line 'l' print command
-                let line = interpreter.get_line().unwrap_or(&[]);
-                let line_string = from_utf8(line);
-                println!("{:?}", line_string.unwrap());
-            }
             Some(b'q') => {
                 // Quit 'q' command
                 break;
@@ -92,13 +84,13 @@ fn parse_breakpoint(command: &[u8]) -> Option<Position> {
 }
 
 fn step(interpreter: &mut DebugInterpreter) {
-    interpreter.step();
+    interpreter.step(&mut ());
     interpreter.io().println_output();
 }
 
 fn debug_run(interpreter: &mut DebugInterpreter, breakpoints: &HashSet<Position>) {
     loop {
-        let status = interpreter.step();
+        let status = interpreter.step(&mut ());
 
         if matches!(
             status,

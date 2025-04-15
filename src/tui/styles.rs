@@ -1,5 +1,7 @@
 use crossterm::style::{Attribute, Attributes, Color, ContentStyle};
 
+use super::FocusedTab;
+
 pub const BORDER: ContentStyle = ContentStyle {
     foreground_color: Some(Color::White),
     // background_color: Some(Color::Black),
@@ -53,3 +55,18 @@ pub const LOGO_EYES: ContentStyle = ContentStyle {
     underline_color: None,
     attributes: Attributes::none(),
 };
+
+pub const PROGRAM_TEXT: ContentStyle = ContentStyle {
+    foreground_color: Some(Color::White),
+    background_color: None,
+    underline_color: None,
+    attributes: Attributes::none().with(Attribute::NormalIntensity),
+};
+
+pub fn tab_heading(current: FocusedTab, focused: FocusedTab) -> ContentStyle {
+    if current == focused {
+        GREEN_HEADING
+    } else {
+        GREEN_HEADING_UNFOCUSED
+    }
+}

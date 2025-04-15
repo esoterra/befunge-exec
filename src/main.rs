@@ -2,22 +2,19 @@ mod core;
 mod debug;
 mod interpreter;
 mod io;
-mod program;
 mod timeline;
 mod tui;
 
-use std::cmp::min;
-use std::fs::File;
 use std::io::Result;
 use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration;
+use std::{cmp::min, fs};
 
 use clap::{Parser, Subcommand};
 use io::StdIO;
 
 use crate::interpreter::{Interpreter, Status};
-use crate::program::VecProgram;
 
 #[derive(Parser)]
 struct Cli {
@@ -31,7 +28,7 @@ enum Command {
 
     Debug { path: PathBuf },
 
-    Tui,
+    Tui { path: PathBuf },
 }
 
 fn main() {
@@ -39,8 +36,10 @@ fn main() {
     let result = match cli.command {
         Command::Run { path } => run(path),
         Command::Debug { path } => debug::debug(path),
-        Command::Tui => {
-            tui::print_tui(tui::FocusedTab::Console).unwrap();
+        Command::Tui { path } => {
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            let program = fs::read(path).unwrap();
+            tui::run_tui(name, program, tui::FocusedTab::Console).unwrap();
             std::process::exit(0);
         }
     };
@@ -51,14 +50,13 @@ fn main() {
 }
 
 fn run(path: PathBuf) -> Result<()> {
-    let file = File::open(&path)?;
-    let program = VecProgram::try_from(file)?;
+    let program = fs::read(path)?;
     let io = StdIO::default();
-    let mut interpreter = Interpreter::new(program, io);
+    let mut interpreter = Interpreter::new(&program, io);
 
     let mut wait_count = 0;
     loop {
-        let status = interpreter.step();
+        let status = interpreter.step(&mut ());
         match status {
             Status::Completed => {
                 wait_count = 0;
@@ -80,18 +78,17 @@ fn run(path: PathBuf) -> Result<()> {
 mod tests {
     use super::core::{Direction, Position};
     use super::interpreter::{Interpreter, Status};
-    use super::program::VecProgram;
+    use crate::interpreter::Cell;
     use crate::io::VecIO;
 
-    type DebugInterpreter = Interpreter<VecProgram, VecIO>;
+    type DebugInterpreter<'src> = Interpreter<VecIO>;
 
-    const EMPTY_STACK: &[u8] = &[];
+    const EMPTY_STACK: &[Cell] = &[];
 
     fn one_liner(line: &[u8]) -> DebugInterpreter {
-        let data = Vec::from(line);
-        let program = VecProgram::from(data);
+        let program = Vec::from(line);
         let io = VecIO::default();
-        Interpreter::new(program, io)
+        Interpreter::new(&program, io)
     }
 
     #[test]
@@ -124,26 +121,26 @@ mod tests {
     fn test_push_num_recipe(opcode: u8, number: u8) {
         let mut interpreter = one_liner(&[opcode, b' ']);
 
-        let status = interpreter.step();
+        let status = interpreter.step(&mut ());
         assert_eq!(Status::Completed, status);
 
         assert_eq!(Direction::Right, interpreter.current_direction());
         assert_eq!(Position { x: 1, y: 0 }, interpreter.current_position());
-        assert_eq!(&[number], interpreter.stack());
+        assert_eq!(&[Cell(number)], interpreter.stack());
     }
 
     #[test]
     fn test_left_arrow() {
         let mut interpreter = one_liner(&[b' ', b'<']);
 
-        let status = interpreter.step();
+        let status = interpreter.step(&mut ());
         assert_eq!(Status::Completed, status);
 
         assert_eq!(Direction::Right, interpreter.current_direction());
         assert_eq!(Position { x: 1, y: 0 }, interpreter.current_position());
         assert_eq!(EMPTY_STACK, interpreter.stack());
 
-        let status = interpreter.step();
+        let status = interpreter.step(&mut ());
         assert_eq!(Status::Completed, status);
 
         assert_eq!(Direction::Left, interpreter.current_direction());
@@ -153,9 +150,9 @@ mod tests {
 
     #[test]
     fn test_arrow_loop() {
-        let program = VecProgram::from(vec![b'v', b'<', b'\n', b'>', b'^']);
+        let program = vec![b'v', b'<', b'\n', b'>', b'^'];
         let io = VecIO::default();
-        let mut interpreter = Interpreter::new(program, io);
+        let mut interpreter = Interpreter::new(&program, io);
 
         let sequence = [
             (0, 1, Direction::Down),
@@ -166,7 +163,7 @@ mod tests {
 
         for _ in 0..255 {
             for (x, y, direction) in sequence.iter().copied() {
-                let status = interpreter.step();
+                let status = interpreter.step(&mut ());
                 assert_eq!(Status::Completed, status);
 
                 assert_eq!(direction, interpreter.current_direction());
@@ -182,20 +179,20 @@ mod tests {
 
         // Step over the 3 spaces and 3 number pushes
         for _i in 0..6 {
-            assert_eq!(Status::Completed, interpreter.step());
+            assert_eq!(Status::Completed, interpreter.step(&mut ()));
         }
         // Verify that the numbers are on the stack
         assert_eq!(Position { x: 6, y: 0 }, interpreter.current_position());
-        assert_eq!(&[2, 1, 0], interpreter.stack());
+        assert_eq!(&[Cell(2), Cell(1), Cell(0)], interpreter.stack());
         // Step over the p command
-        assert_eq!(Status::Completed, interpreter.step());
+        assert_eq!(Status::Completed, interpreter.step(&mut ()));
         // Verify that the position and direction are correct
         assert_eq!(Position { x: 7, y: 0 }, interpreter.current_position());
         assert_eq!(Direction::Right, interpreter.current_direction());
         // Verify that the stack is now empty
         assert_eq!(EMPTY_STACK, interpreter.stack());
         // Verify that the value 2 was placed into the specified position
-        assert_eq!(2, interpreter.get_opcode(Position { x: 1, y: 0 }));
+        assert_eq!(Cell(2), interpreter.get_cell(Position { x: 1, y: 0 }));
     }
 
     #[test]
@@ -206,18 +203,18 @@ mod tests {
         assert_eq!(Position { x: 0, y: 0 }, interpreter.current_position());
         assert_eq!(EMPTY_STACK, interpreter.stack());
 
-        let status = interpreter.step();
+        let status = interpreter.step(&mut ());
         assert_eq!(Status::Completed, status);
-        let status = interpreter.step();
+        let status = interpreter.step(&mut ());
         assert_eq!(Status::Completed, status);
 
-        assert_eq!(&[7, 0], interpreter.stack());
+        assert_eq!(&[Cell(7), Cell(0)], interpreter.stack());
 
-        let status = interpreter.step();
+        let status = interpreter.step(&mut ());
         assert_eq!(Status::Completed, status);
 
         assert_eq!(Direction::Right, interpreter.current_direction());
         assert_eq!(Position { x: 3, y: 0 }, interpreter.current_position());
-        assert_eq!(&[b'4'], interpreter.stack());
+        assert_eq!(&[Cell(b'4')], interpreter.stack());
     }
 }
