@@ -40,7 +40,7 @@ impl DrawBorder for Tui {
 impl Draw for Tui {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         self.draw_headings(window)?;
-        ProgramDisplay { interpreter: &self.interpreter }.draw(window)?;
+        ProgramDisplay { interpreter: &self.interpreter, analysis: &self.analysis }.draw(window)?;
         match self.tab {
             FocusedTab::Console => self.console_view.draw(window)?,
             FocusedTab::Commands => self.commands_view.draw(window)?,
@@ -321,29 +321,61 @@ impl VerticalScrollbar {
 impl<'a> Draw for ProgramDisplay<'a> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         let (width, height) = ProgramView::dimensions(window);
-        window.set_style(styles::PROGRAM_TEXT)?;
+        let space = self.interpreter.space();
         for i in 0..height {
             window.move_to(1, i + 1)?;
-            let mut skipped = 0;
             for j in 0..width {
                 let pos = Position {
                     x: j as u8,
                     y: i as u8,
                 };
-                let cell = self.interpreter.get_cell(pos);
-                if let Some(c) = char::from_u32(cell.0 as u32) {
-                    if c == ' ' {
-                        skipped += 1;
-                    } else {
-                        window.move_right(skipped)?;
-                        skipped = 0;
-                        window.print_char(c)?;
+                let cell = space.get_cell(pos);
+                let state = self.analysis.cell_states.get_cell(pos);
+                let c = char::from_u32(cell.0 as u32).unwrap_or('�');
+                if c == ' ' {
+                    if state.modes() == analyze::Modes::None {
+                        window.set_style(styles::PROGRAM_TEXT)?;
+                        window.print_char(' ')?;
+                        continue;
                     }
-                } else {
-                    window.move_right(skipped)?;
-                    skipped = 0;
-                    window.print(tw("�", 1))?;
+                    if state.modes() == analyze::Modes::Quoted {
+                        window.set_style(styles::VISITED_QUOTED)?;
+                        window.print_char(' ')?;
+                        continue;
+                    }
+                    let c = match state.directions() {
+                        analyze::Directions::None => unreachable!(),
+                        analyze::Directions::Horizontal => '─',
+                        analyze::Directions::Vertical => '│',
+                        analyze::Directions::Both => '┼',
+                    };
+                    window.set_style(styles::VISITED_EMPTY)?;
+                    window.print_char(c)?;
+                    continue;
                 }
+
+                let style = match state.modes() {
+                    analyze::Modes::None => {
+                        eprintln!("Unstyled char {} ({:?})", c, state);
+                        styles::PROGRAM_TEXT
+                    },
+                    analyze::Modes::Quoted => styles::VISITED_QUOTED,
+                    analyze::Modes::Normal => {
+                        match c {
+                            c if c.is_ascii_digit() => styles::VISITED_NUMBER,
+                            '^' | 'v' | '<' | '>' | '?' | '#' | '_' | '|' => styles::VISITED_DIR,
+                            '.' | ',' | '~' | '&' => styles::VISITED_IO,
+                            '+' | '-' | '*' | '/' | '%' | ':' | '$' | '\\' | '`' | '!' => styles::VISITED_STACK,
+                            'p' | 'g' => styles::VISITED_PG,
+                            '@' => styles::VISITED_RED,
+                            _ => styles::VISITED_NORMAL,
+                        }
+                    },
+                    analyze::Modes::Both => styles::VISITED_NORMAL,
+                };
+                window.set_style(style)?;
+                window.print_char(c)?;
+                window.set_style(styles::PROGRAM_TEXT)?;
             }
         }
         Ok(())

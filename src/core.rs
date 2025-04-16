@@ -9,6 +9,10 @@ pub struct Position {
     pub y: u8,
 }
 
+impl Position {
+    pub const ORIGIN: Position = Position { x: 0, y: 0 };
+}
+
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 /// A direction in the 2d program space
 pub enum Direction {
@@ -44,4 +48,19 @@ pub struct Cursor {
     pub dir: Direction,
     /// The mode of the cursor
     pub mode: Mode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cell(pub u8);
+
+impl Default for Cell {
+    fn default() -> Self {
+        Self(b' ')
+    }
+}
+
+impl From<u8> for Cell {
+    fn from(value: u8) -> Self {
+        Cell(value)
+    }
 }

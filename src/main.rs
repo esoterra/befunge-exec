@@ -1,7 +1,9 @@
+mod analyze;
 mod core;
 mod debug;
 mod interpreter;
 mod io;
+mod space;
 mod timeline;
 mod tui;
 
@@ -13,6 +15,7 @@ use std::{cmp::min, fs};
 
 use clap::{Parser, Subcommand};
 use io::StdIO;
+use space::Space;
 
 use crate::interpreter::{Interpreter, Status};
 
@@ -39,7 +42,7 @@ fn main() {
         Command::Tui { path } => {
             let name = path.file_name().unwrap().to_string_lossy().into_owned();
             let program = fs::read(path).unwrap();
-            tui::run_tui(name, program, tui::FocusedTab::Console).unwrap();
+            tui::run_tui(name, program).unwrap();
             std::process::exit(0);
         }
     };
@@ -51,8 +54,9 @@ fn main() {
 
 fn run(path: PathBuf) -> Result<()> {
     let program = fs::read(path)?;
+    let space = Space::new(&program);
     let io = StdIO::default();
-    let mut interpreter = Interpreter::new(&program, io);
+    let mut interpreter = Interpreter::new(space, io);
 
     let mut wait_count = 0;
     loop {
@@ -76,9 +80,9 @@ fn run(path: PathBuf) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::core::{Direction, Position};
+    use super::core::{Direction, Position, Cell};
     use super::interpreter::{Interpreter, Status};
-    use crate::interpreter::Cell;
+    use crate::space::Space;
     use crate::io::VecIO;
 
     type DebugInterpreter<'src> = Interpreter<VecIO>;
@@ -87,15 +91,16 @@ mod tests {
 
     fn one_liner(line: &[u8]) -> DebugInterpreter {
         let program = Vec::from(line);
+        let space = Space::new(&program);
         let io = VecIO::default();
-        Interpreter::new(&program, io)
+        Interpreter::new(space, io)
     }
 
     #[test]
     fn test_initial_settings() {
         let interpreter = one_liner(&[]);
         assert_eq!(Direction::Right, interpreter.current_direction());
-        assert_eq!(Position { x: 0, y: 0 }, interpreter.current_position());
+        assert_eq!(Position::ORIGIN, interpreter.current_position());
         assert_eq!(EMPTY_STACK, interpreter.stack());
     }
 
@@ -144,7 +149,7 @@ mod tests {
         assert_eq!(Status::Completed, status);
 
         assert_eq!(Direction::Left, interpreter.current_direction());
-        assert_eq!(Position { x: 0, y: 0 }, interpreter.current_position());
+        assert_eq!(Position::ORIGIN, interpreter.current_position());
         assert_eq!(EMPTY_STACK, interpreter.stack());
     }
 
@@ -152,7 +157,8 @@ mod tests {
     fn test_arrow_loop() {
         let program = vec![b'v', b'<', b'\n', b'>', b'^'];
         let io = VecIO::default();
-        let mut interpreter = Interpreter::new(&program, io);
+        let space = Space::new(&program);
+        let mut interpreter = Interpreter::new(space, io);
 
         let sequence = [
             (0, 1, Direction::Down),
@@ -192,7 +198,7 @@ mod tests {
         // Verify that the stack is now empty
         assert_eq!(EMPTY_STACK, interpreter.stack());
         // Verify that the value 2 was placed into the specified position
-        assert_eq!(Cell(2), interpreter.get_cell(Position { x: 1, y: 0 }));
+        assert_eq!(Cell(2), interpreter.space().get_cell(Position { x: 1, y: 0 }));
     }
 
     #[test]
@@ -200,7 +206,7 @@ mod tests {
         let mut interpreter = one_liner(&[b'7', b'0', b'g', b' ', b' ', b' ', b' ', b'4']);
 
         assert_eq!(Direction::Right, interpreter.current_direction());
-        assert_eq!(Position { x: 0, y: 0 }, interpreter.current_position());
+        assert_eq!(Position::ORIGIN, interpreter.current_position());
         assert_eq!(EMPTY_STACK, interpreter.stack());
 
         let status = interpreter.step(&mut ());

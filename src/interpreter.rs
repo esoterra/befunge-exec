@@ -1,38 +1,17 @@
-use std::collections::HashMap;
-
-use grid::Grid;
-
-use crate::core::{Cursor, Direction, Mode, Position};
+use crate::core::{Cell, Cursor, Direction, Mode, Position};
 use crate::io::IO;
+use crate::space::Space;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 /// An Interpreter represents a step by step executor for befunge code.
 /// It contains a program, all necessary state, and IO buffers.
 pub struct Interpreter<IOImpl> {
-    grid: Grid<Cell>,
-    map: HashMap<Position, Cell>,
-    rows: usize,
-    cols: usize,
+    space: Space<Cell>,
 
     cursor: Cursor,
     stack: Vec<Cell>,
 
     io: IOImpl,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Cell(pub u8);
-
-impl Default for Cell {
-    fn default() -> Self {
-        Self(b' ')
-    }
-}
-
-impl From<u8> for Cell {
-    fn from(value: u8) -> Self {
-        Cell(value)
-    }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -72,46 +51,15 @@ where
 {
     /// Creates a new Interpreter that executes
     /// the provided program with the provided io.
-    pub fn new(program: &Vec<u8>, io: IOImpl) -> Self {
+    pub fn new(space: Space<Cell>, io: IOImpl) -> Self {
         let cursor = Cursor {
-            pos: Position { x: 0, y: 0 },
+            pos: Position::ORIGIN,
             dir: Direction::Right,
             mode: Mode::Normal,
         };
 
-        let mut cols = 0;
-        let mut rows = 0;
-        let mut last_line = 0;
-        for (i, c) in program.iter().enumerate() {
-            if *c == b'\n' {
-                cols = std::cmp::max(i - last_line, cols);
-                last_line = i + 1;
-                rows += 1;
-            }
-        }
-        if last_line != program.len() {
-            cols = std::cmp::max(program.len() - last_line, cols);
-            rows += 1;
-        }
-
-        let mut grid = Grid::new(rows, cols);
-
-        let mut last_line = 0;
-        let mut row = 0;
-        for (i, c) in program.iter().enumerate() {
-            if *c == b'\n' {
-                last_line = i + 1;
-                row += 1;
-                continue;
-            }
-            grid[(row, i - last_line)] = Cell(*c);
-        }
-
         Interpreter {
-            grid,
-            map: HashMap::new(),
-            cols,
-            rows,
+            space,
             cursor,
             stack: Vec::new(),
             io,
@@ -120,6 +68,10 @@ where
 
     pub fn io(&mut self) -> &mut IOImpl {
         &mut self.io
+    }
+
+    pub fn space(&self) -> &Space<Cell> {
+        &self.space
     }
 
     /// Get the position of the cursor
@@ -138,57 +90,16 @@ where
         &self.stack[..]
     }
 
-    /// Retrieves the cell located at a position in the program
-    pub fn get_cell(&self, pos: Position) -> Cell {
-        let x = pos.x as usize;
-        let y = pos.y as usize;
-        if x > self.grid.cols() || y > self.grid.rows() {
-            self.map.get(&pos).copied().unwrap_or_default()
-        } else {
-            self.grid.get(y, x).copied().unwrap_or_default()
-        }
-    }
-
-    /// Updates the opcode at a specific position in the program
-    fn set_cell(&mut self, pos: Position, cell: Cell, recorder: &mut impl Record) {
-        let old = self.get_cell(pos);
+    fn put(&mut self, pos: Position, cell: Cell, recorder: &mut impl Record) {
+        let old = self.space.get_cell(pos);
         recorder.replace(pos, old.0, cell.0);
-        let x = pos.x as usize;
-        let y = pos.y as usize;
-        if x >= self.grid.cols() || y >= self.grid.rows() {
-            self.map.insert(pos, cell);
-        } else {
-            self.grid[(y, x)] = cell;
-        }
-        self.cols = std::cmp::max(self.cols, x + 1);
-        self.rows = std::cmp::max(self.rows, y + 1);
+        self.space.set_cell(pos, cell);
     }
 
     fn move_auto(&mut self) {
-        let Position { x, y } = self.current_position();
+        let pos = self.current_position();
         let dir = self.current_direction();
-        let cols = self.cols as u8;
-        let rows = self.rows as u8;
-        self.cursor.pos = match dir {
-            Direction::Right => {
-                let x = x + 1;
-                let x = if x >= cols { 0 } else { x };
-                Position { x, y }
-            }
-            Direction::Left => {
-                let x = if x == 0 { cols } else { x - 1 };
-                Position { x, y }
-            }
-            Direction::Up => {
-                let y = if y == 0 { rows } else { y - 1 };
-                Position { x, y }
-            }
-            Direction::Down => {
-                let y = y + 1;
-                let y = if y >= rows { 0 } else { y };
-                Position { x, y }
-            }
-        };
+        self.cursor.pos = self.space.move_pos(pos, dir);
     }
 
     fn pop(&mut self, recorder: &mut impl Record) -> u8 {
@@ -211,7 +122,7 @@ where
 
     /// Interprets the next command
     pub fn step(&mut self, recorder: &mut impl Record) -> Status {
-        let cell = self.get_cell(self.cursor.pos);
+        let cell = self.space.get_cell(self.cursor.pos);
 
         match self.cursor.mode {
             Mode::Quote => self.step_quoted(cell, recorder),
@@ -367,7 +278,7 @@ where
             b'g' => {
                 let upper = self.pop(recorder);
                 let lower = self.pop(recorder);
-                let value = self.get_cell(Position { x: lower, y: upper });
+                let value = self.space.get_cell(Position { x: lower, y: upper });
                 self.push(value.0, recorder);
                 Status::Completed
             }
@@ -375,7 +286,7 @@ where
                 let upper = self.pop(recorder);
                 let middle = self.pop(recorder);
                 let lower = self.pop(recorder);
-                self.set_cell(
+                self.put(
                     Position {
                         x: middle,
                         y: upper,

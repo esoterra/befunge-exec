@@ -15,7 +15,8 @@ pub use text::{t, tw};
 pub use timeline::TimelineView;
 pub use window::Window;
 
-use crate::core::Position;
+use crate::analyze::{self, PathAnalysis};
+use crate::{core::Position, space::Space};
 use crate::interpreter::Interpreter;
 use crate::io::VecIO;
 
@@ -33,10 +34,10 @@ pub enum FocusedTab {
     Timeline,
 }
 
-pub fn run_tui(name: String, program: Vec<u8>, tab: FocusedTab) -> io::Result<()> {
+pub fn run_tui(name: String, program: Vec<u8>) -> io::Result<()> {
     let title = format!("befunge-exec: {}", name);
     let mut window = Window::new()?;
-    let mut tui = Tui::new(title, program, tab, &window)?;
+    let mut tui = Tui::new(title, program, &window)?;
     tui.init(&mut window)?;
 
     tui.draw_frame(&mut window)?;
@@ -73,6 +74,7 @@ pub fn run_tui(name: String, program: Vec<u8>, tab: FocusedTab) -> io::Result<()
 struct Tui {
     title: String,
     program: Vec<u8>,
+    analysis: PathAnalysis,
     interpreter: Interpreter<VecIO>,
     width_bp: WidthBreakPoint,
     height_bp: HeightBreakPoint,
@@ -193,18 +195,21 @@ impl HeightBreakPoint {
 }
 
 impl Tui {
-    fn new(title: String, program: Vec<u8>, tab: FocusedTab, window: &Window) -> io::Result<Self> {
-        let interpreter = Interpreter::new(&program, VecIO::default());
+    fn new(title: String, program: Vec<u8>, window: &Window) -> io::Result<Self> {
+        let space = Space::new(&program);
+        let analysis = analyze::analyze_path(&space);
+        let interpreter = Interpreter::new(space, VecIO::default());
         let program_view = ProgramView::default();
         let width_bp = WidthBreakPoint::for_width(window.width());
         let height_bp = HeightBreakPoint::for_height(window.height());
         Ok(Self {
             title,
             program,
+            analysis,
             interpreter,
             width_bp,
             height_bp,
-            tab,
+            tab: FocusedTab::Commands,
             has_tabbed: false,
             has_back_tabbed: false,
             program_view,
@@ -292,6 +297,7 @@ impl Tui {
 }
 
 struct ProgramDisplay<'a> {
+    analysis: &'a PathAnalysis,
     interpreter: &'a Interpreter<VecIO>
 }
 

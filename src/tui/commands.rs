@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use core::fmt;
 use crossterm::event::{KeyCode, KeyEvent};
 use std::borrow::Cow;
@@ -44,7 +46,7 @@ impl fmt::Display for Command {
 impl Default for CommandsView {
     fn default() -> Self {
         Self {
-            output: Default::default(),
+            output: Cow::Borrowed(HELP_OUTPUT),
             input_contents: Default::default(),
             input_cursor: 0,
             mode: Mode::Paused,

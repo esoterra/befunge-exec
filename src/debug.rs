@@ -8,6 +8,7 @@ use std::str::from_utf8;
 use crate::core::Position;
 use crate::interpreter::{Interpreter, Status as InterpreterStatus};
 use crate::io::VecIO;
+use crate::space::Space;
 
 type DebugInterpreter = Interpreter<VecIO>;
 
@@ -15,8 +16,9 @@ pub fn debug(path: PathBuf) -> Result<()> {
     let input = stdin();
 
     let program = fs::read(&path)?;
+    let space = Space::new(&program);
     let io = VecIO::default();
-    let mut interpreter = Interpreter::new(&program, io);
+    let mut interpreter = Interpreter::new(space, io);
     let mut breakpoints = HashSet::new();
 
     loop {
