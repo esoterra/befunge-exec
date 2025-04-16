@@ -291,6 +291,13 @@ impl Tui {
     }
 }
 
+struct ProgramDisplay<'a> {
+    interpreter: &'a Interpreter<VecIO>
+}
+
+struct CursorDisplay {
+    pos: Position
+}
 
 struct TabHeadings {
     tab: FocusedTab,

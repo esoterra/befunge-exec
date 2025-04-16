@@ -228,12 +228,12 @@ pub struct TabSidebar {
 pub fn tabs_sidebar(tight: bool, tab: bool, even: bool) -> TabSidebar {
     match (tight, tab, even) {
         (true, true, true) => TabSidebar {
-            top: tw("╗───────╢", 9),
+            top: tw("╣───────╢", 9),
             mid: tw("║       ║", 9),
             bot: tw("╠═══════╣", 9),
         },
         (true, true, false) => TabSidebar {
-            top: tw("╗───┴───╢", 9),
+            top: tw("╣───┴───╢", 9),
             mid: tw("║       ║", 9),
             bot: tw("╠═══════╣", 9),
         },

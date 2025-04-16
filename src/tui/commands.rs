@@ -14,25 +14,29 @@ pub struct CommandsView {
 
 pub enum Mode {
     Running,
-    Stepping,
-    Stopped,
+    Stepping { n: u16 },
+    Paused,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum Command {
     Help,
-    Step,
+    Step { n: u16 },
     Run,
+    Pause,
     Breakpoint { pos: Position },
+    Quit,
 }
 
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Command::Help => write!(f, "Help 'h'/'help' command"),
-            Command::Step => write!(f, "Step 's' command"),
-            Command::Run => write!(f, "Run 'r' command"),
-            Command::Breakpoint { pos } => write!(f, "Breakpoint 'b {} {}' command", pos.x, pos.y),
+            Command::Help => write!(f, "Help"),
+            Command::Step { n } => write!(f, "Step {}", *n),
+            Command::Run => write!(f, "Run"),
+            Command::Pause => write!(f, "Pause"),
+            Command::Breakpoint { pos } => write!(f, "Breakpoint at ({}, {})", pos.x, pos.y),
+            Command::Quit => write!(f, "Quit")
         }
     }
 }
@@ -43,7 +47,7 @@ impl Default for CommandsView {
             output: Default::default(),
             input_contents: Default::default(),
             input_cursor: 0,
-            mode: Mode::Stopped,
+            mode: Mode::Paused,
         }
     }
 }
@@ -91,15 +95,32 @@ impl CommandsView {
                         Command::Help => {
                             self.output = Cow::Borrowed(HELP_OUTPUT);
                         }
-                        Command::Step => {
-                            self.mode = Mode::Stepping;
-                            self.output = Cow::Borrowed("Taking a step.");
+                        Command::Step { n} => {
+                            if let Mode::Stepping { n: old } = self.mode {
+                                let total = old + n;
+                                self.output = match n {
+                                    1 => Cow::Owned(format!("Taking 1 more step ({} total)", total)),
+                                    _ => Cow::Owned(format!("Taking {} more steps ({} total)", n, total))
+                                };
+                                self.mode = Mode::Stepping { n: total };
+                            } else {
+                                self.output = match n {
+                                    1 => Cow::Owned(format!("Taking {} steps", n)),
+                                    _ => Cow::Borrowed("Taking 1 step")
+                                };
+                                self.mode = Mode::Stepping { n };
+                            }
                         }
                         Command::Run => {
                             self.mode = Mode::Running;
                             self.output = Cow::Borrowed("Running...");
+                        },
+                        Command::Pause => {
+                            self.mode = Mode::Paused;
+                            self.output = Cow::Borrowed("Paused");
                         }
-                        Command::Breakpoint { pos } => {}
+                        Command::Breakpoint { pos } => {},
+                        Command::Quit => {}
                     }
                 },
                 Err(error) => {
@@ -122,13 +143,22 @@ impl CommandsView {
         if let Some(first) = args.next() {
             let (command, expected) = match first {
                 "h" | "help" => (Command::Help, 0),
-                "r" => (Command::Run, 0),
-                "s" => (Command::Step, 0),
-                "b" => {
+                "s" | "step" => {
+                    if let Some(arg) = args.next() {
+                        let n = arg.parse().unwrap();
+                        (Command::Step { n }, 1)
+                    } else {
+                        (Command::Step { n: 1 }, 0)
+                    }
+                },
+                "r" | "run" => (Command::Run, 0),
+                "p" | "pause" => (Command::Pause, 0),
+                "b" | "breakpoint" => {
                     let command = Command::Breakpoint { pos: todo!() };
                     (command, 2)
                 },
-                // "exit" => std::process::exit(0),
+                "q" | "quit" => (Command::Quit, 0),
+                "" => return Ok(None),
                 arg => return Err(CommandError::UnknownCommand { arg }),
             };
             if let Some(found) = try_collect(args) {
@@ -160,7 +190,7 @@ enum CommandError<'a> {
 }
 
 const HELP_OUTPUT: &str =
-    "Help: r - runs the program\n      s - takes a step\n      'b <x> <y>' - places a breakpoint";
+    "step  │ s [n]     │ takes a step\nrun   │ r [speed] │ runs the program\npause │ p         │ pauses the execution\nbreak │ b <x> <y> │ places a breakpoint\nquit  │ q         │ exits the debugger";
 
 fn try_collect<'a>(mut args: impl Iterator<Item = &'a str>) -> Option<Vec<&'a str>> {
     if let Some(arg) = args.next() {

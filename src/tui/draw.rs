@@ -40,7 +40,7 @@ impl DrawBorder for Tui {
 impl Draw for Tui {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         self.draw_headings(window)?;
-        draw_program(window, &self.interpreter)?;
+        ProgramDisplay { interpreter: &self.interpreter }.draw(window)?;
         match self.tab {
             FocusedTab::Console => self.console_view.draw(window)?,
             FocusedTab::Commands => self.commands_view.draw(window)?,
@@ -107,6 +107,7 @@ impl Tui {
             tabbed_both_ways: self.has_tabbed && self.has_back_tabbed,
         }
         .draw(window)?;
+        CursorDisplay { pos: self.interpreter.current_position() }.draw(window)?;
         CatLogo.draw(window)?;
         Ok(())
     }
@@ -181,7 +182,7 @@ impl Draw for CommandsView {
             let y = window.height() - 8 + i;
             window.move_to(x, y)?;
             let line = if line.len() > max_width { &line[0..max_width] } else { line };
-            window.print(t(line))?;
+            window.print(tw(line, line.chars().count() as u16))?;
         }
 
         // Draw command input
@@ -212,7 +213,7 @@ impl DrawBorder for TimelineView {
 impl Draw for TimelineView {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         let x = 1;
-        let y = window.height();
+        let y = window.height() - 3;
         let total = window.width() - NON_PROGRAM_WIDTH;
         let bar = total / 4;
         let offset = 0;
@@ -317,37 +318,55 @@ impl VerticalScrollbar {
     }
 }
 
-fn draw_program(
-    window: &mut Window,
-    interpreter: &Interpreter<VecIO>,
-) -> io::Result<()> {
-    let (width, height) = ProgramView::dimensions(window);
-    window.set_style(styles::PROGRAM_TEXT)?;
-    for i in 0..height {
-        window.move_to(1, i + 1)?;
-        let mut skipped = 0;
-        for j in 0..width {
-            let pos = Position {
-                x: j as u8,
-                y: i as u8,
-            };
-            let cell = interpreter.get_cell(pos);
-            if let Some(c) = char::from_u32(cell.0 as u32) {
-                if c == ' ' {
-                    skipped += 1;
+impl<'a> Draw for ProgramDisplay<'a> {
+    fn draw(&self, window: &mut Window) -> io::Result<()> {
+        let (width, height) = ProgramView::dimensions(window);
+        window.set_style(styles::PROGRAM_TEXT)?;
+        for i in 0..height {
+            window.move_to(1, i + 1)?;
+            let mut skipped = 0;
+            for j in 0..width {
+                let pos = Position {
+                    x: j as u8,
+                    y: i as u8,
+                };
+                let cell = self.interpreter.get_cell(pos);
+                if let Some(c) = char::from_u32(cell.0 as u32) {
+                    if c == ' ' {
+                        skipped += 1;
+                    } else {
+                        window.move_right(skipped)?;
+                        skipped = 0;
+                        window.print_char(c)?;
+                    }
                 } else {
                     window.move_right(skipped)?;
                     skipped = 0;
-                    window.print_char(c)?;
+                    window.print(tw("�", 1))?;
                 }
-            } else {
-                window.move_right(skipped)?;
-                skipped = 0;
-                window.print(tw("�", 1))?;
             }
         }
+        Ok(())
     }
-    Ok(())
+}
+
+impl Draw for CursorDisplay {
+    fn draw(&self, window: &mut Window) -> io::Result<()> {
+        // X row
+        window.move_to(window.width() - 8, window.height() - 8)?;
+        window.set_style(styles::CYAN_HEADING)?;
+        window.print(t("X: "))?;
+        window.set_style(styles::PROGRAM_TEXT)?;
+        window.print(t(&format!("{}", self.pos.x)))?;
+        // Y row
+        window.move_to(window.width() - 8, window.height() - 6)?;
+        window.set_style(styles::CYAN_HEADING)?;
+        window.print(t("Y: "))?;
+        window.set_style(styles::PROGRAM_TEXT)?;
+        window.print(t(&format!("{}", self.pos.y)))?;
+
+        Ok(())
+    }
 }
 
 impl Draw for CatLogo {
