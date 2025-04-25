@@ -1,4 +1,4 @@
-Copyright (c) 2020 kyleb.cc
+Copyright (c) 2020 Robin Brown (esoterra)
 
 MIT License
 
