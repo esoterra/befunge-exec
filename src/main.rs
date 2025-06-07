@@ -1,3 +1,4 @@
+#![allow(clippy::collapsible_else_if)]
 mod analyze;
 mod core;
 mod debug_command;
@@ -136,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_left_arrow() {
-        let mut interpreter = one_liner(&[b' ', b'<']);
+        let mut interpreter = one_liner(b" <");
 
         let status = interpreter.step(&mut ());
         assert_eq!(Status::Completed, status);
@@ -181,7 +182,7 @@ mod tests {
 
     #[test]
     fn test_put() {
-        let mut interpreter = one_liner(&[b' ', b' ', b' ', b'2', b'1', b'0', b'p', b' ']);
+        let mut interpreter = one_liner(b"   210p ");
 
         // Step over the 3 spaces and 3 number pushes
         for _i in 0..6 {
@@ -206,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        let mut interpreter = one_liner(&[b'7', b'0', b'g', b' ', b' ', b' ', b' ', b'4']);
+        let mut interpreter = one_liner(b"70g    4");
 
         assert_eq!(Direction::Right, interpreter.current_direction());
         assert_eq!(Position::ORIGIN, interpreter.current_position());

@@ -33,7 +33,7 @@ const N_MASK: u8 = 0b11110000;
 
 struct Unquoted<'a>(&'a str);
 
-impl<'a> fmt::Debug for Unquoted<'a> {
+impl fmt::Debug for Unquoted<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }

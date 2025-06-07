@@ -37,6 +37,7 @@ pub enum FocusedTab {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Default)]
 pub struct ConsoleView {
     pub scroll_height: u16,
 }
@@ -163,11 +164,6 @@ impl ListenForMouse for Tabs {
     }
 }
 
-impl Default for ConsoleView {
-    fn default() -> Self {
-        Self { scroll_height: 0 }
-    }
-}
 
 #[derive(Debug, PartialEq, Eq)]
 enum Command {
@@ -397,7 +393,7 @@ const HELP_OUTPUT: &str = "step  │ s [n]     │ takes a step\nrun   │ r [sp
 fn try_collect<'a>(mut args: impl Iterator<Item = &'a str>) -> Option<Vec<&'a str>> {
     if let Some(arg) = args.next() {
         let mut v = vec![arg];
-        while let Some(arg) = args.next() {
+        for arg in args {
             v.push(arg);
         }
         Some(v)

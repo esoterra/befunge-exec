@@ -92,7 +92,7 @@ pub struct Sidebar<'d> {
     pub debugger: &'d Debugger,
 }
 
-impl<'d> DrawBorder for Sidebar<'d> {
+impl DrawBorder for Sidebar<'_> {
     fn draw_border(&self, window: &mut Window) -> io::Result<()> {
         let Dimensions { cols, rows } = ProgramView::dimensions(window);
         let even_parity = ProgramView::height_parity_even(window);
@@ -108,7 +108,7 @@ impl<'d> DrawBorder for Sidebar<'d> {
     }
 }
 
-impl<'d> Draw for Sidebar<'d> {
+impl Draw for Sidebar<'_> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         StackHeading.draw(window)?;
 
@@ -541,7 +541,7 @@ struct ProgramDisplay<'d> {
     debugger: &'d Debugger,
 }
 
-impl<'a> Draw for ProgramDisplay<'a> {
+impl Draw for ProgramDisplay<'_> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         let Dimensions { cols, rows } = ProgramView::dimensions(window);
         let space = self.debugger.interpreter.space();
@@ -606,7 +606,7 @@ pub struct ProgramCellReset<'d> {
     pub pos: Position,
 }
 
-impl<'d> Draw for ProgramCellReset<'d> {
+impl Draw for ProgramCellReset<'_> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         // Skip drawing if out of bounds
         let Dimensions { cols, rows } = ProgramView::dimensions(window);
@@ -638,7 +638,7 @@ pub struct ProgramCellCursor<'d> {
     pub background_on: bool,
 }
 
-impl<'d> Draw for ProgramCellCursor<'d> {
+impl Draw for ProgramCellCursor<'_> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         // Skip drawing if out of bounds
         let Dimensions { cols, rows } = ProgramView::dimensions(window);

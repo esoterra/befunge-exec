@@ -29,7 +29,7 @@ pub fn debug(path: PathBuf) -> Result<()> {
         input.read_line(&mut buffer)?;
         let bytes = buffer.trim().as_bytes();
 
-        match bytes.get(0) {
+        match bytes.first() {
             Some(b's') => {
                 // Step 's' command
                 step(&mut interpreter);

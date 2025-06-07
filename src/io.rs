@@ -66,7 +66,7 @@ impl InputBuffer {
         let value = self.buffer[self.offset];
         self.offset += 1;
         self.length -= 1;
-        return Some(value);
+        Some(value)
     }
 
     fn is_empty(&self) -> bool {
@@ -165,7 +165,7 @@ impl VecIO {
         let mut out = stdout();
         if !self.output_buffer.is_empty() {
             out.write(&self.output_buffer).unwrap();
-            write!(out, "\n").unwrap();
+            writeln!(out).unwrap();
             out.flush().unwrap();
             self.output_buffer.clear();
         }
@@ -198,8 +198,8 @@ fn try_read_number(iter: impl Iterator<Item = u8>) -> Result<(usize, u8), usize>
     let mut iter = iter.enumerate();
     let (mut offset, mut num) = base_number(&mut iter)?;
     let skippable = offset - 1;
-    while let Some((i, byte)) = iter.next() {
-        if matches!(byte, b'0'..=b'9') {
+    for (i, byte) in iter {
+        if byte.is_ascii_digit() {
             let value = byte - b'0';
             if let Some(new_num) = try_combine(num, value) {
                 offset = i + 1;
@@ -216,9 +216,9 @@ fn try_read_number(iter: impl Iterator<Item = u8>) -> Result<(usize, u8), usize>
 
 fn base_number(iter: &mut impl Iterator<Item = (usize, u8)>) -> Result<(usize, u8), usize> {
     let mut skippable = 0;
-    while let Some((i, byte)) = iter.next() {
+    for (i, byte) in iter.by_ref() {
         let n = i + 1;
-        if matches!(byte, b'0'..=b'9') {
+        if byte.is_ascii_digit() {
             let value = byte - b'0';
             return Ok((n, value));
         } else {
