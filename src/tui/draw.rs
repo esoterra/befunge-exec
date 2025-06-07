@@ -1,3 +1,5 @@
+use crate::analyze::Directions;
+
 use super::*;
 use std::io;
 
@@ -32,12 +34,28 @@ impl Draw for Tui {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         StackHeading.draw(window)?;
         ProgramDisplay {
-            interpreter: &self.debugger.interpreter,
-            analysis: &self.debugger.analysis,
+            debugger: &self.debugger,
+        }
+        .draw(window)?;
+        Sidebar {
+            debugger: &self.debugger,
         }
         .draw(window)?;
         self.tabs.draw(window)?;
         Ok(())
+    }
+}
+
+pub fn stack_room(window: &Window) -> u16 {
+    let Dimensions { cols: _, rows } = ProgramView::dimensions(window);
+    if rows % 2 == 0 {
+        // -3 is for the Stack header and dead row
+        // / 2 is because each element requires a divider
+        (rows - 3) / 2
+    } else {
+        // -2 is for the Stack header
+        // / 2 is because each element requires a divider
+        (rows - 2) / 2
     }
 }
 
@@ -46,7 +64,7 @@ impl Tui {
         let Dimensions { cols: _, rows } = ProgramView::dimensions(window);
         if self.show_sidebar(window) {
             let even_parity = ProgramView::height_parity_even(window);
-            let collapse = false; // TODO
+            let collapse = self.debugger.stack_height() > stack_room(window);
             for i in 0..rows {
                 let sidebar = text::sidebar(i, rows, even_parity, collapse);
                 window.line(tw("║", 1), text::SPACES, sidebar)?;
@@ -68,6 +86,150 @@ impl Tui {
         }
         Ok(())
     }
+}
+
+pub struct Sidebar<'d> {
+    pub debugger: &'d Debugger,
+}
+
+impl<'d> DrawBorder for Sidebar<'d> {
+    fn draw_border(&self, window: &mut Window) -> io::Result<()> {
+        let Dimensions { cols, rows } = ProgramView::dimensions(window);
+        let even_parity = ProgramView::height_parity_even(window);
+        let collapse = self.debugger.stack_height() > stack_room(window);
+        window.set_style(styles::BORDER)?;
+        for i in 0..rows {
+            let sidebar = text::sidebar(i, rows, even_parity, collapse);
+            window.move_to(cols + 1, i + 1)?;
+            window.clear_until_newline()?;
+            window.print(sidebar)?;
+        }
+        Ok(())
+    }
+}
+
+impl<'d> Draw for Sidebar<'d> {
+    fn draw(&self, window: &mut Window) -> io::Result<()> {
+        StackHeading.draw(window)?;
+
+        let Dimensions { cols, rows } = ProgramView::dimensions(window);
+        let even_parity = ProgramView::height_parity_even(window);
+        let room = stack_room(window);
+        let stack_height = self.debugger.stack_height();
+        window.set_style(styles::CYAN_HEADING)?;
+
+        let number_x = cols + 2;
+        let symbol_x = cols + 6;
+
+        if stack_height > room {
+            let skipped = stack_height - room;
+            let skip_x = cols + 3;
+
+            // Draw bottom value
+            let bottom = &self.debugger.interpreter.stack()[0];
+            window.move_to(number_x, rows)?;
+            window.print(t(&format!("{}", bottom.0)))?;
+            window.move_to(symbol_x, rows)?;
+            if let Some(label) = value_label(bottom.0) {
+                window.print(t(label))?;
+            } else {
+                if let Some(c) = char::from_u32(bottom.0 as u32) {
+                    window.print_char('"')?;
+                    window.print_char(c)?;
+                    window.print_char('"')?;
+                }
+            }
+
+            // Draw skip count
+            window.move_to(skip_x, rows - 2)?;
+            window.print(t(&format!("{}", skipped)))?;
+
+            // Draw top values
+            let mut y = if even_parity { rows - 5 } else { rows - 4 };
+            let top_start = (skipped + 1) as usize;
+            let stack_top = &self.debugger.interpreter.stack()[top_start..];
+            for cell in stack_top.iter() {
+                window.move_to(number_x, y)?;
+                window.print(t(&format!("{}", cell.0)))?;
+                window.move_to(symbol_x, y)?;
+                if let Some(label) = value_label(cell.0) {
+                    window.print(t(label))?;
+                } else {
+                    if let Some(c) = char::from_u32(cell.0 as u32) {
+                        window.print_char('"')?;
+                        window.print_char(c)?;
+                        window.print_char('"')?;
+                    }
+                }
+                y -= 2;
+            }
+        } else {
+            let mut y = if even_parity { rows - 1 } else { rows };
+            // Draw values
+            for cell in self.debugger.interpreter.stack().iter() {
+                window.move_to(number_x, y)?;
+                window.print(t(&format!("{}", cell.0)))?;
+                window.move_to(symbol_x, y)?;
+                if let Some(label) = value_label(cell.0) {
+                    window.print(t(label))?;
+                } else {
+                    if let Some(c) = char::from_u32(cell.0 as u32) {
+                        window.print_char('"')?;
+                        window.print_char(c)?;
+                        window.print_char('"')?;
+                    }
+                }
+                y -= 2;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn value_label(value: u8) -> Option<&'static str> {
+    // based on https://www.ascii-code.com/
+    let code = match value {
+        // ASCII Control Characters
+        b'\x00' => "NUL",
+        b'\x01' => "SOH",
+        b'\x02' => "STX",
+        b'\x03' => "ETX",
+        b'\x04' => "EOT",
+        b'\x05' => "ENQ",
+        b'\x06' => "ACK",
+        b'\x07' => "BEL",
+        b'\x08' => "BS",
+        b'\x09' => "HT",
+        b'\x0A' => "LF",
+        b'\x0B' => "VT",
+        b'\x0C' => "FF",
+        b'\x0D' => "CR",
+        b'\x0E' => "SO",
+        b'\x0F' => "SI",
+        b'\x10' => "DLE",
+        b'\x11' => "DC1",
+        b'\x12' => "DC2",
+        b'\x13' => "DC3",
+        b'\x14' => "DC4",
+        b'\x15' => "NAK",
+        b'\x16' => "SYN",
+        b'\x17' => "ETB",
+        b'\x18' => "CAN",
+        b'\x19' => "EM",
+        b'\x1A' => "SUB",
+        b'\x1B' => "ESC",
+        b'\x1C' => "FS",
+        b'\x1D' => "GS",
+        b'\x1E' => "RS",
+        b'\x1F' => "US",
+        // ASCII Printable Characters
+        b'\x20' => "SP",
+        b'\x27' => " \' ",
+        b'\x7F' => "DEL",
+
+        _ => return None,
+    };
+    Some(code)
 }
 
 pub struct ProgramView;
@@ -375,15 +537,14 @@ impl VerticalScrollbar {
     }
 }
 
-struct ProgramDisplay<'a> {
-    analysis: &'a PathAnalysis,
-    interpreter: &'a Interpreter<VecIO>,
+struct ProgramDisplay<'d> {
+    debugger: &'d Debugger,
 }
 
 impl<'a> Draw for ProgramDisplay<'a> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         let Dimensions { cols, rows } = ProgramView::dimensions(window);
-        let space = self.interpreter.space();
+        let space = self.debugger.interpreter.space();
         for y in 0..rows {
             window.move_to(1, y + 1)?;
             let mut skipped = 0;
@@ -393,7 +554,7 @@ impl<'a> Draw for ProgramDisplay<'a> {
                     y: y as u8,
                 };
                 let cell = space.get_cell(pos);
-                let state = self.analysis.cell_states.get_cell(pos);
+                let state = self.debugger.analysis.cell_states.get_cell(pos);
                 let c = char::from_u32(cell.0 as u32).unwrap_or('�');
 
                 if c == ' ' && state.modes() == analyze::Modes::None {
@@ -413,33 +574,13 @@ impl<'a> Draw for ProgramDisplay<'a> {
                         window.print_char(' ')?;
                         continue;
                     }
-                    let c = match state.directions() {
-                        analyze::Directions::None => unreachable!(),
-                        analyze::Directions::Horizontal => '─',
-                        analyze::Directions::Vertical => '│',
-                        analyze::Directions::Both => '┼',
-                    };
+                    let c = state.directions().blank_char();
                     window.set_style(styles::VISITED_EMPTY)?;
                     window.print_char(c)?;
                     continue;
                 }
 
-                let style = match state.modes() {
-                    analyze::Modes::None => styles::PROGRAM_TEXT,
-                    analyze::Modes::Quoted => styles::VISITED_QUOTED,
-                    analyze::Modes::Normal => match c {
-                        c if c.is_ascii_digit() => styles::VISITED_NUMBER,
-                        '^' | 'v' | '<' | '>' | '?' | '#' | '_' | '|' => styles::VISITED_DIR,
-                        '.' | ',' | '~' | '&' => styles::VISITED_IO,
-                        '+' | '-' | '*' | '/' | '%' | ':' | '$' | '\\' | '`' | '!' => {
-                            styles::VISITED_STACK
-                        }
-                        'p' | 'g' => styles::VISITED_PG,
-                        '@' => styles::VISITED_RED,
-                        _ => styles::VISITED_NORMAL,
-                    },
-                    analyze::Modes::Both => styles::VISITED_NORMAL,
-                };
+                let style = styles::for_cell(state.modes(), c);
                 window.set_style(style)?;
                 window.print_char(c)?;
                 window.set_style(styles::PROGRAM_TEXT)?;
@@ -449,8 +590,87 @@ impl<'a> Draw for ProgramDisplay<'a> {
     }
 }
 
-struct CursorDisplay {
-    pos: Position,
+impl Directions {
+    fn blank_char(self) -> char {
+        match self {
+            Directions::None => ' ',
+            Directions::Horizontal => '─',
+            Directions::Vertical => '│',
+            Directions::Both => '┼',
+        }
+    }
+}
+
+pub struct ProgramCellReset<'d> {
+    pub debugger: &'d Debugger,
+    pub pos: Position,
+}
+
+impl<'d> Draw for ProgramCellReset<'d> {
+    fn draw(&self, window: &mut Window) -> io::Result<()> {
+        // Skip drawing if out of bounds
+        let Dimensions { cols, rows } = ProgramView::dimensions(window);
+        if self.pos.x as u16 >= cols || self.pos.y as u16 >= rows {
+            return Ok(());
+        }
+        // Move to position
+        window.move_to((self.pos.x + 1) as u16, (self.pos.y + 1) as u16)?;
+        // Get cell info
+        let cell = self.debugger.interpreter.space().get_cell(self.pos);
+        let state = self.debugger.analysis.cell_states.get_cell(self.pos);
+        let c = char::from_u32(cell.0 as u32).unwrap_or('�');
+        // Select character and style
+        let (style, c) = match (c, state.modes()) {
+            (' ', analyze::Modes::Quoted) => (styles::VISITED_QUOTED, ' '),
+            (' ', _) => (styles::VISITED_EMPTY, state.directions().blank_char()),
+            _ => (styles::for_cell(state.modes(), c), c),
+        };
+        window.set_style(style)?;
+        window.print_char(c)?;
+        window.set_style(styles::BORDER)?;
+        Ok(())
+    }
+}
+
+pub struct ProgramCellCursor<'d> {
+    pub debugger: &'d Debugger,
+    pub pos: Position,
+    pub background_on: bool,
+}
+
+impl<'d> Draw for ProgramCellCursor<'d> {
+    fn draw(&self, window: &mut Window) -> io::Result<()> {
+        // Skip drawing if out of bounds
+        let Dimensions { cols, rows } = ProgramView::dimensions(window);
+        if self.pos.x as u16 >= cols || self.pos.y as u16 >= rows {
+            return Ok(());
+        }
+        // Move to position
+        window.move_to((self.pos.x + 1) as u16, (self.pos.y + 1) as u16)?;
+        // Get cell info
+        let cell = self.debugger.interpreter.space().get_cell(self.pos);
+        let state = self.debugger.analysis.cell_states.get_cell(self.pos);
+        let c = char::from_u32(cell.0 as u32).unwrap_or('�');
+        // Select character and style
+        let (mut style, c) = match (c, state.modes()) {
+            (' ', analyze::Modes::Quoted) => (styles::VISITED_QUOTED, ' '),
+            (' ', _) => (styles::VISITED_EMPTY, state.directions().blank_char()),
+            _ => (styles::for_cell(state.modes(), c), c),
+        };
+        if self.background_on {
+            style.background_color = styles::CURSOR_ON;
+        } else {
+            style.background_color = styles::CURSOR_OFF;
+        }
+        window.set_style(style)?;
+        window.print_char(c)?;
+        window.set_style(styles::BORDER)?;
+        Ok(())
+    }
+}
+
+pub struct CursorDisplay {
+    pub pos: Position,
 }
 
 impl Draw for CursorDisplay {
@@ -458,13 +678,15 @@ impl Draw for CursorDisplay {
         // X row
         window.move_to(window.width() - 8, window.height() - 8)?;
         window.set_style(styles::CYAN_HEADING)?;
-        window.print(t("X: "))?;
+        window.print(t("X:    "))?;
+        window.move_to(window.width() - 5, window.height() - 8)?;
         window.set_style(styles::PROGRAM_TEXT)?;
         window.print(t(&format!("{}", self.pos.x)))?;
         // Y row
         window.move_to(window.width() - 8, window.height() - 6)?;
         window.set_style(styles::CYAN_HEADING)?;
         window.print(t("Y: "))?;
+        window.move_to(window.width() - 5, window.height() - 6)?;
         window.set_style(styles::PROGRAM_TEXT)?;
         window.print(t(&format!("{}", self.pos.y)))?;
 

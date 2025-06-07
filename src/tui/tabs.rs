@@ -2,10 +2,16 @@
 
 use core::fmt;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
-use std::borrow::Cow;
+use std::{borrow::Cow, io};
 use thiserror::Error;
 
-use crate::{core::Position, tui::{draw::{Dimensions, ProgramView}, ListenForKey, ListenForMouse, Window}};
+use crate::{
+    core::Position,
+    tui::{
+        ListenForKey, ListenForMouse, Window,
+        draw::{Dimensions, ProgramView},
+    },
+};
 
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct Tabs {
@@ -76,6 +82,17 @@ impl Tabs {
     pub fn has_tabbed_both_ways(&self) -> bool {
         self.has_back_tabbed && self.has_tabbed
     }
+
+    pub fn move_to_cursor(&self, window: &mut Window) -> io::Result<()> {
+        let Dimensions { cols, rows } = ProgramView::dimensions(window);
+        let (x, y) = match self.focused {
+            FocusedTab::Console => (1, rows + 4),
+            FocusedTab::Commands => (self.commands.input_cursor + 4, window.height() - 2),
+            FocusedTab::Timeline => (1, window.height() - 2),
+        };
+        window.move_to(x, y)?;
+        Ok(())
+    }
 }
 
 impl ListenForKey for Tabs {
@@ -113,7 +130,7 @@ impl ListenForMouse for Tabs {
 
     fn on_mouse_event(&mut self, event: MouseEvent, window: &Window) -> Self::Output {
         if matches!(event.kind, MouseEventKind::Down(_)) {
-            let Dimensions { rows, cols} = ProgramView::dimensions(window);
+            let Dimensions { rows, cols } = ProgramView::dimensions(window);
             let tab_min_row = rows + 2;
             let tab_max_row = tab_min_row + 2;
             if event.row >= tab_min_row && event.row <= tab_max_row {
@@ -126,23 +143,23 @@ impl ListenForMouse for Tabs {
                             self.focused = FocusedTab::Console;
                             self.dirty = true;
                         }
-                    },
+                    }
                     30..=39 => {
                         if self.focused != FocusedTab::Commands {
                             self.focused = FocusedTab::Commands;
                             self.dirty = true;
                         }
-                    },
+                    }
                     41..=50 => {
                         if self.focused != FocusedTab::Timeline {
                             self.focused = FocusedTab::Timeline;
                             self.dirty = true;
                         }
-                    },
+                    }
                     _ => {}
                 }
             }
-        } 
+        }
     }
 }
 

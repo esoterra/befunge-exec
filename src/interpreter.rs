@@ -29,7 +29,8 @@ pub enum Status {
 
 pub trait Record {
     fn start_step(&mut self, at: Position, instruction: u8);
-    fn finish_step(&mut self);
+    fn rollback_step(&mut self);
+    fn commit_step(&mut self);
 
     fn replace(&mut self, at: Position, old: u8, new: u8);
     fn pop(&mut self, old: u8);
@@ -41,7 +42,8 @@ pub trait Record {
 
 impl Record for () {
     fn start_step(&mut self, _at: Position, _instruction: u8) {}
-    fn finish_step(&mut self) {}
+    fn rollback_step(&mut self) {}
+    fn commit_step(&mut self) {}
 
     fn replace(&mut self, _at: Position, _old: u8, _new: u8) {}
     fn pop(&mut self, _old: u8) {}
@@ -91,7 +93,6 @@ where
     }
 
     /// Get the current stack contents
-    #[cfg(test)]
     pub fn stack(&self) -> &[Cell] {
         &self.stack[..]
     }
@@ -129,11 +130,20 @@ where
     /// Interprets the next command
     pub fn step(&mut self, recorder: &mut impl Record) -> Status {
         let cell = self.space.get_cell(self.cursor.pos);
+        recorder.start_step(self.cursor.pos, cell.0);
 
-        match self.cursor.mode {
+        let status = match self.cursor.mode {
             Mode::Quote => self.step_quoted(cell, recorder),
             Mode::Normal => self.step_unquoted(cell, recorder),
+        };
+
+        if status == Status::Waiting {
+            recorder.rollback_step();
+        } else {
+            recorder.commit_step();
         }
+
+        status
     }
 
     fn step_quoted(&mut self, cell: Cell, recorder: &mut impl Record) -> Status {

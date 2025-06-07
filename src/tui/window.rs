@@ -77,6 +77,10 @@ impl Window {
         execute!(self.stdout, Clear(ClearType::All))
     }
 
+    pub fn clear_until_newline(&mut self) -> io::Result<()> {
+        execute!(self.stdout, Clear(ClearType::UntilNewLine))
+    }
+
     pub fn clear_down(&mut self) -> io::Result<()> {
         execute!(self.stdout, Clear(ClearType::FromCursorDown))
     }

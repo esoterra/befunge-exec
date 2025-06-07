@@ -12,15 +12,15 @@ pub use tabs::{CommandsView, ConsoleView, FocusedTab, Tabs, TimelineView};
 pub use text::{t, tw};
 pub use window::Window;
 
-use crate::analyze::{self, PathAnalysis};
+use crate::analyze;
+use crate::core::Position;
 use crate::debugger::Debugger;
-use crate::interpreter::Interpreter;
-use crate::io::VecIO;
-use crate::tui::draw::{Dimensions, ProgramView};
+use crate::tui::draw::{
+    CursorDisplay, Dimensions, ProgramCellCursor, ProgramCellReset, ProgramView, Sidebar,
+};
 use crate::tui::tabs::CommandEvent;
-use crate::{core::Position};
 
-use crossterm::event::{Event, KeyCode, KeyEvent, MouseEvent, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEvent, MouseEvent};
 
 const TICKS_PER_SECOND: u64 = 40;
 const MILLIS_PER_TICK: u64 = 1000 / TICKS_PER_SECOND;
@@ -52,7 +52,7 @@ pub fn run_tui(name: String, program: Vec<u8>) -> io::Result<()> {
             let event = crossterm::event::read()?;
             match event {
                 Event::Resize(width, height) => {
-                    eprintln!("Resized to ({}, {})", width, height);
+                    // eprintln!("Resized to ({}, {})", width, height);
                     window.set_size(width, height);
                     resized = true;
                 }
@@ -60,7 +60,10 @@ pub fn run_tui(name: String, program: Vec<u8>) -> io::Result<()> {
                     if event.code == KeyCode::Esc {
                         break 'tick;
                     }
-                    tui.on_key_event(event);
+                    let event = tui.on_key_event(event);
+                    if event.is_some() {
+                        break 'tick;
+                    }
                 }
                 Event::Mouse(event) => tui.on_mouse_event(event, &window),
                 _ => {}
@@ -71,6 +74,11 @@ pub fn run_tui(name: String, program: Vec<u8>) -> io::Result<()> {
         resized = false;
 
         next_tick += Duration::from_millis(MILLIS_PER_TICK);
+
+        let now = Instant::now();
+        if now >= next_tick {
+            eprintln!("Slow frame!!");
+        }
     }
 
     tui.close(&mut window)?;
@@ -94,6 +102,7 @@ struct Tui {
     title: String,
     debugger: Debugger,
     tabs: Tabs,
+    counter: u64,
 }
 
 const NON_PROGRAM_WIDTH: u16 = 10;
@@ -105,6 +114,7 @@ impl Tui {
             title,
             debugger: Debugger::new(program),
             tabs: Default::default(),
+            counter: 0,
         }
     }
 
@@ -132,40 +142,99 @@ impl Tui {
     }
 
     fn tick(&mut self, window: &mut Window, resized: bool) -> io::Result<()> {
+        self.counter += 1;
+        self.counter %= TICKS_PER_SECOND;
+
         window.start_frame()?;
 
-        self.debugger.tick();
+        let old_pos = self.debugger.current_position();
+        let debugger_updated = self.debugger.tick();
+        let new_pos = self.debugger.current_position();
 
         self.tabs.position = self.debugger.current_position();
 
-        if resized {
+        let redraw_all = resized;
+        let redraw_top = resized;
+        let redraw_bot = resized || self.tabs.dirty;
+
+        if redraw_all {
             // redraw everything on resize
             eprintln!("Draw everything");
             window.clear()?;
             self.draw_border(window)?;
             self.draw(window)?;
-        } else {
-            if self.tabs.dirty {
-                eprintln!("Draw tabs");
-                self.tabs.dirty = false;
-                let Dimensions { cols: _, rows } = ProgramView::dimensions(window);
-                window.move_to(0, rows + 1)?;
-                window.clear_down()?;
-                window.set_style(styles::BORDER)?;
-                self.tabs.draw_border(window)?;
-                self.draw_border_last(window)?;
-                self.tabs.draw(window)?;
-            }
+        } else if redraw_bot {
+            eprintln!("Draw tabs");
+            self.tabs.dirty = false;
+            let Dimensions { cols: _, rows } = ProgramView::dimensions(window);
+            window.move_to(0, rows + 1)?;
+            window.clear_down()?;
+            window.set_style(styles::BORDER)?;
+            self.tabs.draw_border(window)?;
+            self.draw_border_last(window)?;
+            self.tabs.draw(window)?;
         }
+
+        if new_pos != old_pos {
+            self.counter = 0;
+            ProgramCellReset {
+                debugger: &self.debugger,
+                pos: old_pos,
+            }
+            .draw(window)?;
+            ProgramCellCursor {
+                debugger: &self.debugger,
+                pos: new_pos,
+                background_on: true,
+            }
+            .draw(window)?;
+        } else {
+            let background_on = self.counter < 20;
+            ProgramCellCursor {
+                debugger: &self.debugger,
+                pos: new_pos,
+                background_on,
+            }
+            .draw(window)?;
+        }
+
+        if !redraw_top && debugger_updated {
+            let sidebar = Sidebar {
+                debugger: &self.debugger,
+            };
+            // Redraw sidebar border if stack overflow state changed.
+            sidebar.draw_border(window)?;
+            sidebar.draw(window)?;
+        }
+
+        if !redraw_bot && old_pos != new_pos {
+            eprintln!("Update position tracker in corner");
+            CursorDisplay { pos: new_pos }.draw(window)?;
+        }
+
+        self.tabs.move_to_cursor(window)?;
         window.end_frame()
     }
 }
 
+struct QuitEvent;
+
 impl ListenForKey for Tui {
-    type Output = Option<CommandEvent>;
+    type Output = Option<QuitEvent>;
 
     fn on_key_event(&mut self, event: KeyEvent) -> Self::Output {
-        self.tabs.on_key_event(event)
+        let command_event = self.tabs.on_key_event(event);
+        if let Some(event) = command_event {
+            match event {
+                CommandEvent::Load { path } => todo!("Load program in '{}'", path),
+                CommandEvent::Step { n } => self.debugger.add_steps(n),
+                CommandEvent::Run => self.debugger.start_running(),
+                CommandEvent::Pause => self.debugger.pause(),
+                CommandEvent::Breakpoint { pos } => self.debugger.toggle_breakpoint(pos),
+                CommandEvent::Quit => return Some(QuitEvent),
+            }
+        }
+        None
     }
 }
 
@@ -173,11 +242,11 @@ impl ListenForMouse for Tui {
     type Output = ();
 
     fn on_mouse_event(&mut self, event: MouseEvent, window: &Window) -> Self::Output {
-        match event.kind {
-            MouseEventKind::Moved => {}
-            MouseEventKind::Drag(_) => {}
-            _ => eprintln!("Mouse event: {:?}", event),
-        }
+        // match event.kind {
+        //     MouseEventKind::Moved => {}
+        //     MouseEventKind::Drag(_) => {}
+        //     _ => eprintln!("Mouse event: {:?}", event),
+        // }
         self.tabs.on_mouse_event(event, window);
     }
 }
