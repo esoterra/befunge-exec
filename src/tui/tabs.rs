@@ -5,7 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use std::borrow::Cow;
 use thiserror::Error;
 
-use crate::core::Position;
+use crate::{core::Position, tui::ListenForKey};
 
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct Tabs {
@@ -40,7 +40,6 @@ pub struct CommandsView {
     pub output: Cow<'static, str>,
     pub input_contents: String,
     pub input_cursor: u16,
-    pub mode: Mode,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -54,30 +53,6 @@ pub enum Mode {
 pub struct TimelineView;
 
 impl Tabs {
-    pub fn on_key_event(&mut self, event: KeyEvent) {
-        match event {
-            KeyEvent {
-                code: KeyCode::BackTab,
-                ..
-            } => {
-                self.focus_previous();
-            }
-            KeyEvent {
-                code: KeyCode::Tab, ..
-            } => {
-                self.focus_next();
-            }
-            _ => match self.focused {
-                FocusedTab::Console => {}
-                FocusedTab::Commands => {
-                    self.commands.on_key_event(event);
-                    self.dirty = true;
-                }
-                FocusedTab::Timeline => {}
-            },
-        }
-    }
-
     fn focus_next(&mut self) {
         self.has_tabbed = true;
         self.focused = match self.focused {
@@ -103,6 +78,36 @@ impl Tabs {
     }
 }
 
+impl ListenForKey for Tabs {
+    type Output = Option<CommandEvent>;
+
+    fn on_key_event(&mut self, event: KeyEvent) -> Self::Output {
+        match event {
+            KeyEvent {
+                code: KeyCode::BackTab,
+                ..
+            } => {
+                self.focus_previous();
+                None
+            }
+            KeyEvent {
+                code: KeyCode::Tab, ..
+            } => {
+                self.focus_next();
+                None
+            }
+            _ => match self.focused {
+                FocusedTab::Console => None,
+                FocusedTab::Commands => {
+                    self.dirty = true;
+                    self.commands.on_key_event(event)
+                }
+                FocusedTab::Timeline => None,
+            },
+        }
+    }
+}
+
 impl Default for ConsoleView {
     fn default() -> Self {
         Self { scroll_height: 0 }
@@ -112,6 +117,7 @@ impl Default for ConsoleView {
 #[derive(Debug, PartialEq, Eq)]
 enum Command {
     Help,
+    Load { path: String },
     Step { n: u16 },
     Run,
     Pause,
@@ -123,10 +129,11 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Command::Help => write!(f, "Help"),
+            Command::Load { path } => write!(f, "Load '{}'", path),
             Command::Step { n } => write!(f, "Step {}", *n),
             Command::Run => write!(f, "Run"),
             Command::Pause => write!(f, "Pause"),
-            Command::Breakpoint { pos } => write!(f, "Breakpoint at ({}, {})", pos.x, pos.y),
+            Command::Breakpoint { pos } => write!(f, "Breakpoint at {}", pos),
             Command::Quit => write!(f, "Quit"),
         }
     }
@@ -138,13 +145,23 @@ impl Default for CommandsView {
             output: Cow::Borrowed(HELP_OUTPUT),
             input_contents: Default::default(),
             input_cursor: 0,
-            mode: Mode::Paused,
         }
     }
 }
 
-impl CommandsView {
-    pub fn on_key_event(&mut self, event: KeyEvent) {
+pub enum CommandEvent {
+    Load { path: String },
+    Step { n: u16 },
+    Run,
+    Pause,
+    Breakpoint { pos: Position },
+    Quit,
+}
+
+impl ListenForKey for CommandsView {
+    type Output = Option<CommandEvent>;
+
+    fn on_key_event(&mut self, event: KeyEvent) -> Self::Output {
         match event {
             KeyEvent {
                 code: KeyCode::Left,
@@ -153,6 +170,7 @@ impl CommandsView {
                 if self.input_cursor > 0 {
                     self.input_cursor -= 1;
                 }
+                None
             }
             KeyEvent {
                 code: KeyCode::Right,
@@ -162,67 +180,64 @@ impl CommandsView {
                 if self.input_cursor < max_cursor {
                     self.input_cursor += 1;
                 }
+                None
             }
             KeyEvent {
                 code: KeyCode::Backspace,
                 ..
             } => {
                 if self.input_cursor == 0 {
-                    return;
+                    return None;
                 }
                 let remove_char = self.input_cursor - 1;
                 self.input_contents.remove(remove_char as usize);
                 self.input_cursor -= 1;
+                None
             }
             KeyEvent {
                 code: KeyCode::Enter,
                 ..
             } => match self.parse_command() {
-                Ok(None) => {}
+                Ok(None) => None,
                 Ok(Some(command)) => {
                     self.input_contents.clear();
                     self.input_cursor = 0;
                     match command {
                         Command::Help => {
                             self.output = Cow::Borrowed(HELP_OUTPUT);
+                            None
+                        }
+                        Command::Load { path } => {
+                            self.output = Cow::Owned(format!("Loading {}", path));
+                            Some(CommandEvent::Load { path })
                         }
                         Command::Step { n } => {
-                            if let Mode::Stepping { n: old } = self.mode {
-                                let total = old + n;
-                                self.output = match n {
-                                    1 => {
-                                        Cow::Owned(format!("Taking 1 more step ({} total)", total))
-                                    }
-                                    _ => Cow::Owned(format!(
-                                        "Taking {} more steps ({} total)",
-                                        n, total
-                                    )),
-                                };
-                                self.mode = Mode::Stepping { n: total };
-                            } else {
-                                self.output = match n {
-                                    1 => Cow::Owned(format!("Taking {} steps", n)),
-                                    _ => Cow::Borrowed("Taking 1 step"),
-                                };
-                                self.mode = Mode::Stepping { n };
-                            }
+                            self.output = match n {
+                                1 => Cow::Owned(format!("Taking {} steps", n)),
+                                _ => Cow::Borrowed("Taking 1 step"),
+                            };
+                            Some(CommandEvent::Step { n })
                         }
                         Command::Run => {
-                            self.mode = Mode::Running;
                             self.output = Cow::Borrowed("Running...");
+                            Some(CommandEvent::Run)
                         }
                         Command::Pause => {
-                            self.mode = Mode::Paused;
                             self.output = Cow::Borrowed("Paused");
+                            Some(CommandEvent::Pause)
                         }
-                        Command::Breakpoint { pos } => {}
-                        Command::Quit => {}
+                        Command::Breakpoint { pos } => {
+                            self.output = Cow::Owned(format!("Setting breakpoint at {}", pos));
+                            Some(CommandEvent::Breakpoint { pos })
+                        }
+                        Command::Quit => Some(CommandEvent::Quit),
                     }
                 }
                 Err(error) => {
                     let error_string = error.to_string();
                     eprintln!("{}", error_string);
                     self.output = Cow::Owned(error_string);
+                    None
                 }
             },
             KeyEvent { code, .. } => {
@@ -230,15 +245,30 @@ impl CommandsView {
                     self.input_contents.insert(self.input_cursor as usize, c);
                     self.input_cursor += 1;
                 }
+                None
             }
         }
     }
+}
 
+impl CommandsView {
     fn parse_command(&mut self) -> Result<Option<Command>, CommandError> {
         let mut args = self.input_contents.split(' ');
         if let Some(first) = args.next() {
             let (command, expected) = match first {
                 "h" | "help" => (Command::Help, 0),
+                "l" | "load" => {
+                    let path = match args.next() {
+                        Some(arg) => String::from(arg),
+                        None => {
+                            return Err(CommandError::TooFewArguments {
+                                command: Command::Load { path: "".into() },
+                                expected: 1,
+                            });
+                        }
+                    };
+                    (Command::Load { path }, 1)
+                }
                 "s" | "step" => {
                     if let Some(arg) = args.next() {
                         let n = arg.parse().unwrap();
@@ -250,7 +280,29 @@ impl CommandsView {
                 "r" | "run" => (Command::Run, 0),
                 "p" | "pause" => (Command::Pause, 0),
                 "b" | "breakpoint" => {
-                    let command = Command::Breakpoint { pos: todo!() };
+                    let x = match args.next() {
+                        Some(arg) => arg.parse().unwrap(),
+                        None => {
+                            return Err(CommandError::TooFewArguments {
+                                command: Command::Breakpoint {
+                                    pos: Default::default(),
+                                },
+                                expected: 2,
+                            });
+                        }
+                    };
+                    let y = match args.next() {
+                        Some(arg) => arg.parse().unwrap(),
+                        None => {
+                            return Err(CommandError::TooFewArguments {
+                                command: Command::Load { path: "".into() },
+                                expected: 2,
+                            });
+                        }
+                    };
+                    let command = Command::Breakpoint {
+                        pos: Position { x, y },
+                    };
                     (command, 2)
                 }
                 "q" | "quit" => (Command::Quit, 0),

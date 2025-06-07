@@ -1,6 +1,7 @@
 mod analyze;
 mod core;
-mod debug;
+mod debug_command;
+mod debugger;
 mod interpreter;
 mod io;
 mod space;
@@ -38,7 +39,7 @@ fn main() {
     let cli = Cli::parse();
     let result = match cli.command {
         Command::Run { path } => run(path),
-        Command::Debug { path } => debug::debug(path),
+        Command::Debug { path } => debug_command::debug(path),
         Command::Tui { path } => {
             let name = path.file_name().unwrap().to_string_lossy().into_owned();
             let program = fs::read(path).unwrap();

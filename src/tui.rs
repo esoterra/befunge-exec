@@ -15,9 +15,11 @@ pub use window::Window;
 use crate::analyze::{self, PathAnalysis};
 use crate::interpreter::Interpreter;
 use crate::io::VecIO;
+use crate::tui::draw::{Dimensions, ProgramView};
+use crate::tui::tabs::CommandEvent;
 use crate::{core::Position, space::Space};
 
-use crossterm::event::{Event, KeyCode, KeyEvent, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 
 const TICKS_PER_SECOND: u64 = 40;
 const MILLIS_PER_TICK: u64 = 1000 / TICKS_PER_SECOND;
@@ -59,11 +61,7 @@ pub fn run_tui(name: String, program: Vec<u8>) -> io::Result<()> {
                     }
                     tui.on_key_event(event);
                 }
-                Event::Mouse(event) => match event.kind {
-                    MouseEventKind::Moved => {}
-                    MouseEventKind::Drag(_) => {}
-                    _ => eprintln!("Mouse event: {:?}", event),
-                },
+                Event::Mouse(event) => tui.on_mouse_event(event),
                 _ => {}
             }
         }
@@ -78,7 +76,17 @@ pub fn run_tui(name: String, program: Vec<u8>) -> io::Result<()> {
     Ok(())
 }
 
-pub const WIDE_WIDTH: u16 = 80;
+pub trait ListenForKey {
+    type Output;
+
+    fn on_key_event(&mut self, event: KeyEvent) -> Self::Output;
+}
+
+pub trait ListenForMouse {
+    type Output;
+
+    fn on_mouse_event(&mut self, event: MouseEvent) -> Self::Output;
+}
 
 #[allow(dead_code)]
 struct Tui {
@@ -86,66 +94,12 @@ struct Tui {
     program: Vec<u8>,
     analysis: PathAnalysis,
     interpreter: Interpreter<VecIO>,
-
-    program_view: ProgramView,
     tabs: Tabs,
 }
 
 const NON_PROGRAM_WIDTH: u16 = 10;
 const NON_PROGRAM_HEIGHT: u16 = 12;
 
-#[derive(Default)]
-struct ProgramView {}
-
-struct Dimensions {
-    cols: u16,
-    rows: u16,
-}
-
-impl ProgramView {
-    fn dimensions(window: &Window) -> Dimensions {
-        Self::dimensions_for_size(window.width(), window.height())
-    }
-
-    fn dimensions_for_size(width: u16, height: u16) -> Dimensions {
-        let cols = width - NON_PROGRAM_WIDTH;
-        let rows = height - NON_PROGRAM_HEIGHT;
-        Dimensions { cols, rows }
-    }
-
-    fn height_parity_even(window: &Window) -> bool {
-        let height = window.height() - NON_PROGRAM_HEIGHT;
-        height % 2 == 0
-    }
-}
-
-struct CursorDisplay {
-    pos: Position,
-}
-
-struct TabHeadings {
-    tab: FocusedTab,
-    tabbed_both_ways: bool,
-}
-
-struct StackHeading;
-struct CatLogo;
-
-/// Show title, tabs, hint, and sidebar
-/// ║ Befunge Debugger ║ Console ║ Commands │ Timeline │  switch using [shift] tab  ║ <- 81
-/// Range: w > 80
-///
-/// Show title, tabs, and sidebar
-/// ║ Befunge Debugger ║ Console ║ Commands │ Timeline ║ <- 52
-/// Range: 80 >= w > 51
-///
-/// Show tabs
-/// ║ Console ║ Commands │ Timeline ║ <- 33
-/// Range: 51 >= w > 32
-///
-/// Don't show any tab section or headings
-/// ║                   ║ <- 21
-/// Range: 32 > w
 impl Tui {
     fn new(title: String, program: Vec<u8>) -> io::Result<Self> {
         let space = Space::new(&program);
@@ -156,7 +110,6 @@ impl Tui {
             program,
             analysis,
             interpreter,
-            program_view: Default::default(),
             tabs: Default::default(),
         })
     }
@@ -186,6 +139,7 @@ impl Tui {
 
     fn tick(&mut self, window: &mut Window, resized: bool) -> io::Result<()> {
         window.start_frame()?;
+
         if resized {
             // redraw everything on resize
             eprintln!("Draw everything");
@@ -207,8 +161,24 @@ impl Tui {
         }
         window.end_frame()
     }
+}
 
-    fn on_key_event(&mut self, event: KeyEvent) {
-        self.tabs.on_key_event(event);
+impl ListenForKey for Tui {
+    type Output = Option<CommandEvent>;
+
+    fn on_key_event(&mut self, event: KeyEvent) -> Self::Output {
+        self.tabs.on_key_event(event)
+    }
+}
+
+impl ListenForMouse for Tui {
+    type Output = ();
+
+    fn on_mouse_event(&mut self, event: MouseEvent) -> Self::Output {
+        match event.kind {
+            MouseEventKind::Moved => {}
+            MouseEventKind::Drag(_) => {}
+            _ => eprintln!("Mouse event: {:?}", event),
+        }
     }
 }

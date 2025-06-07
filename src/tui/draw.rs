@@ -70,6 +70,47 @@ impl Tui {
     }
 }
 
+pub struct ProgramView;
+
+pub struct Dimensions {
+    pub cols: u16,
+    pub rows: u16,
+}
+
+impl ProgramView {
+    pub fn dimensions(window: &Window) -> Dimensions {
+        Self::dimensions_for_size(window.width(), window.height())
+    }
+
+    pub fn dimensions_for_size(width: u16, height: u16) -> Dimensions {
+        let cols = width - NON_PROGRAM_WIDTH;
+        let rows = height - NON_PROGRAM_HEIGHT;
+        Dimensions { cols, rows }
+    }
+
+    pub fn height_parity_even(window: &Window) -> bool {
+        let height = window.height() - NON_PROGRAM_HEIGHT;
+        height % 2 == 0
+    }
+}
+
+pub const WIDE_WIDTH: u16 = 80;
+
+/// Show title, tabs, hint, and sidebar
+/// ║ Befunge Debugger ║ Console ║ Commands │ Timeline │  switch using [shift] tab  ║ <- 81
+/// Range: w > 80
+///
+/// Show title, tabs, and sidebar
+/// ║ Befunge Debugger ║ Console ║ Commands │ Timeline ║ <- 52
+/// Range: 80 >= w > 51
+///
+/// Show tabs
+/// ║ Console ║ Commands │ Timeline ║ <- 33
+/// Range: 51 >= w > 32
+///
+/// Don't show any tab section or headings
+/// ║                   ║ <- 21
+/// Range: 32 > w
 impl DrawBorder for Tabs {
     fn draw_border(&self, window: &mut Window) -> io::Result<()> {
         let tight = window.width() == 60;
@@ -235,6 +276,8 @@ impl Draw for TimelineView {
     }
 }
 
+struct StackHeading;
+
 impl Draw for StackHeading {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         window.move_to(window.width() - 7, 1)?;
@@ -242,6 +285,11 @@ impl Draw for StackHeading {
         window.print(t("Stack"))?;
         Ok(())
     }
+}
+
+struct TabHeadings {
+    tab: FocusedTab,
+    tabbed_both_ways: bool,
 }
 
 impl Draw for TabHeadings {
@@ -401,6 +449,10 @@ impl<'a> Draw for ProgramDisplay<'a> {
     }
 }
 
+struct CursorDisplay {
+    pos: Position,
+}
+
 impl Draw for CursorDisplay {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         // X row
@@ -419,6 +471,8 @@ impl Draw for CursorDisplay {
         Ok(())
     }
 }
+
+struct CatLogo;
 
 impl Draw for CatLogo {
     fn draw(&self, window: &mut Window) -> io::Result<()> {

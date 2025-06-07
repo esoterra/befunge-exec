@@ -1,3 +1,5 @@
+use core::fmt;
+
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Default)]
 /// Represents a 2d position in the program space
 pub struct Position {
@@ -7,6 +9,12 @@ pub struct Position {
     /// The y dimension
     /// Corresponds to the row, indexed from top to bottom.
     pub y: u8,
+}
+
+impl fmt::Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
 }
 
 impl Position {
