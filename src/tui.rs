@@ -13,11 +13,12 @@ pub use text::{t, tw};
 pub use window::Window;
 
 use crate::analyze::{self, PathAnalysis};
+use crate::debugger::Debugger;
 use crate::interpreter::Interpreter;
 use crate::io::VecIO;
 use crate::tui::draw::{Dimensions, ProgramView};
 use crate::tui::tabs::CommandEvent;
-use crate::{core::Position, space::Space};
+use crate::{core::Position};
 
 use crossterm::event::{Event, KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 
@@ -27,7 +28,7 @@ const MILLIS_PER_TICK: u64 = 1000 / TICKS_PER_SECOND;
 pub fn run_tui(name: String, program: Vec<u8>) -> io::Result<()> {
     let title = format!("befunge-exec: {}", name);
     let mut window = Window::new()?;
-    let mut tui = Tui::new(title, program)?;
+    let mut tui = Tui::new(title, program);
 
     tui.init(&mut window)?;
 
@@ -61,7 +62,7 @@ pub fn run_tui(name: String, program: Vec<u8>) -> io::Result<()> {
                     }
                     tui.on_key_event(event);
                 }
-                Event::Mouse(event) => tui.on_mouse_event(event),
+                Event::Mouse(event) => tui.on_mouse_event(event, &window),
                 _ => {}
             }
         }
@@ -85,15 +86,13 @@ pub trait ListenForKey {
 pub trait ListenForMouse {
     type Output;
 
-    fn on_mouse_event(&mut self, event: MouseEvent) -> Self::Output;
+    fn on_mouse_event(&mut self, event: MouseEvent, window: &Window) -> Self::Output;
 }
 
 #[allow(dead_code)]
 struct Tui {
     title: String,
-    program: Vec<u8>,
-    analysis: PathAnalysis,
-    interpreter: Interpreter<VecIO>,
+    debugger: Debugger,
     tabs: Tabs,
 }
 
@@ -101,17 +100,12 @@ const NON_PROGRAM_WIDTH: u16 = 10;
 const NON_PROGRAM_HEIGHT: u16 = 12;
 
 impl Tui {
-    fn new(title: String, program: Vec<u8>) -> io::Result<Self> {
-        let space = Space::new(&program);
-        let analysis = analyze::analyze_path(&space);
-        let interpreter = Interpreter::new(space, VecIO::default());
-        Ok(Self {
+    fn new(title: String, program: Vec<u8>) -> Self {
+        Self {
             title,
-            program,
-            analysis,
-            interpreter,
+            debugger: Debugger::new(program),
             tabs: Default::default(),
-        })
+        }
     }
 
     fn show_outer_border(&self, _window: &Window) -> bool {
@@ -139,6 +133,10 @@ impl Tui {
 
     fn tick(&mut self, window: &mut Window, resized: bool) -> io::Result<()> {
         window.start_frame()?;
+
+        self.debugger.tick();
+
+        self.tabs.position = self.debugger.current_position();
 
         if resized {
             // redraw everything on resize
@@ -174,11 +172,12 @@ impl ListenForKey for Tui {
 impl ListenForMouse for Tui {
     type Output = ();
 
-    fn on_mouse_event(&mut self, event: MouseEvent) -> Self::Output {
+    fn on_mouse_event(&mut self, event: MouseEvent, window: &Window) -> Self::Output {
         match event.kind {
             MouseEventKind::Moved => {}
             MouseEventKind::Drag(_) => {}
             _ => eprintln!("Mouse event: {:?}", event),
         }
+        self.tabs.on_mouse_event(event, window);
     }
 }

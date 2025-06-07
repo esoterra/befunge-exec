@@ -5,7 +5,6 @@ mod debugger;
 mod interpreter;
 mod io;
 mod space;
-mod timeline;
 mod tui;
 
 use std::io::Result;

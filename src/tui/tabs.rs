@@ -1,11 +1,11 @@
 #![allow(unused)]
 
 use core::fmt;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use std::borrow::Cow;
 use thiserror::Error;
 
-use crate::{core::Position, tui::ListenForKey};
+use crate::{core::Position, tui::{draw::{Dimensions, ProgramView}, ListenForKey, ListenForMouse, Window}};
 
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct Tabs {
@@ -105,6 +105,44 @@ impl ListenForKey for Tabs {
                 FocusedTab::Timeline => None,
             },
         }
+    }
+}
+
+impl ListenForMouse for Tabs {
+    type Output = ();
+
+    fn on_mouse_event(&mut self, event: MouseEvent, window: &Window) -> Self::Output {
+        if matches!(event.kind, MouseEventKind::Down(_)) {
+            let Dimensions { rows, cols} = ProgramView::dimensions(window);
+            let tab_min_row = rows + 2;
+            let tab_max_row = tab_min_row + 2;
+            if event.row >= tab_min_row && event.row <= tab_max_row {
+                // ║ Befunge Debugger ║ Console ║ Commands │ Timeline │
+                //                     20      28           41       50
+                //                               30       39
+                match event.column {
+                    20..=28 => {
+                        if self.focused != FocusedTab::Console {
+                            self.focused = FocusedTab::Console;
+                            self.dirty = true;
+                        }
+                    },
+                    30..=39 => {
+                        if self.focused != FocusedTab::Commands {
+                            self.focused = FocusedTab::Commands;
+                            self.dirty = true;
+                        }
+                    },
+                    41..=50 => {
+                        if self.focused != FocusedTab::Timeline {
+                            self.focused = FocusedTab::Timeline;
+                            self.dirty = true;
+                        }
+                    },
+                    _ => {}
+                }
+            }
+        } 
     }
 }
 

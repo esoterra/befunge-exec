@@ -32,8 +32,8 @@ impl Draw for Tui {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         StackHeading.draw(window)?;
         ProgramDisplay {
-            interpreter: &self.interpreter,
-            analysis: &self.analysis,
+            interpreter: &self.debugger.interpreter,
+            analysis: &self.debugger.analysis,
         }
         .draw(window)?;
         self.tabs.draw(window)?;

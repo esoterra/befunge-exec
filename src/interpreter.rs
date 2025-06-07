@@ -28,19 +28,25 @@ pub enum Status {
 }
 
 pub trait Record {
-    fn replace(&mut self, pos: Position, old: u8, new: u8);
-    fn pop(&mut self, value: u8);
+    fn start_step(&mut self, at: Position, instruction: u8);
+    fn finish_step(&mut self);
+
+    fn replace(&mut self, at: Position, old: u8, new: u8);
+    fn pop(&mut self, old: u8);
     fn pop_bottom(&mut self);
-    fn push(&mut self, value: u8);
+    fn push(&mut self, new: u8);
     fn enter_quote(&mut self);
     fn exit_quote(&mut self);
 }
 
 impl Record for () {
-    fn replace(&mut self, _pos: Position, _old: u8, _new: u8) {}
-    fn pop(&mut self, _value: u8) {}
+    fn start_step(&mut self, _at: Position, _instruction: u8) {}
+    fn finish_step(&mut self) {}
+
+    fn replace(&mut self, _at: Position, _old: u8, _new: u8) {}
+    fn pop(&mut self, _old: u8) {}
     fn pop_bottom(&mut self) {}
-    fn push(&mut self, _value: u8) {}
+    fn push(&mut self, _new: u8) {}
     fn enter_quote(&mut self) {}
     fn exit_quote(&mut self) {}
 }
