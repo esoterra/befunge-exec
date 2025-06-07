@@ -36,8 +36,7 @@ pub enum FocusedTab {
     Timeline,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[derive(Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct ConsoleView {
     pub scroll_height: u16,
 }
@@ -163,7 +162,6 @@ impl ListenForMouse for Tabs {
         }
     }
 }
-
 
 #[derive(Debug, PartialEq, Eq)]
 enum Command {

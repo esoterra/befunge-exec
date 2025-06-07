@@ -17,7 +17,7 @@ impl<Cell> Space<Cell>
 where
     Cell: From<u8> + Default,
 {
-    pub fn new(program: &Vec<u8>) -> Self {
+    pub fn new(program: &[u8]) -> Self {
         let mut cols = 0;
         let mut rows = 0;
         let mut last_line = 0;

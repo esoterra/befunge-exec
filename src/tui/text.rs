@@ -177,6 +177,7 @@ pub const COMMANDS: StaticText = t("Commands");
 pub const TIMELINE: StaticText = t("Timeline");
 pub const TAB_SWITCH_HINT: StaticText = t("switch using [shift] tab");
 
+#[allow(clippy::if_same_then_else)]
 pub fn sidebar(i: u16, rows: u16, even: bool, collapse: bool) -> StaticText {
     if i == 0 {
         tw("║       ║", 9)

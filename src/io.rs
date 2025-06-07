@@ -143,7 +143,7 @@ impl IO for StdIO {
     }
 
     fn write(&mut self, buf: &[u8]) {
-        self.stdout.write(buf).unwrap();
+        self.stdout.write_all(buf).unwrap();
     }
 }
 
@@ -164,7 +164,7 @@ impl VecIO {
     pub fn println_output(&mut self) {
         let mut out = stdout();
         if !self.output_buffer.is_empty() {
-            out.write(&self.output_buffer).unwrap();
+            out.write_all(&self.output_buffer).unwrap();
             writeln!(out).unwrap();
             out.flush().unwrap();
             self.output_buffer.clear();
