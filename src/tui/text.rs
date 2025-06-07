@@ -177,19 +177,19 @@ pub const COMMANDS: StaticText = t("Commands");
 pub const TIMELINE: StaticText = t("Timeline");
 pub const TAB_SWITCH_HINT: StaticText = t("switch using [shift] tab");
 
-pub fn sidebar(i: u16, height: u16, even: bool, collapse: bool) -> StaticText {
+pub fn sidebar(i: u16, rows: u16, even: bool, collapse: bool) -> StaticText {
     if i == 0 {
         tw("║       ║", 9)
     } else if i == 1 {
         tw("╟───┬───╢", 9)
     } else {
-        let row_last = height - 1;
+        let row_last = rows - 1;
         if collapse {
-            debug_assert!(height > 10);
-            let pre_collapse = height - 5;
-            let collapse_top = height - 4;
-            let collapse_mid = height - 3;
-            let collapse_bot = height - 2;
+            debug_assert!(rows > 10);
+            let pre_collapse = rows - 5;
+            let collapse_top = rows - 4;
+            let collapse_mid = rows - 3;
+            let collapse_bot = rows - 2;
             if even && i == pre_collapse {
                 tw("╟───┴───╢", 9)
             } else if even && i == collapse_top {

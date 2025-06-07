@@ -15,7 +15,7 @@ pub struct Space<Cell> {
 
 impl<Cell> Space<Cell>
 where
-    Cell: From<u8> + Default
+    Cell: From<u8> + Default,
 {
     pub fn new(program: &Vec<u8>) -> Self {
         let mut cols = 0;
@@ -57,7 +57,7 @@ where
 
 impl<Cell> Space<Cell>
 where
-    Cell: Copy + Default
+    Cell: Copy + Default,
 {
     pub fn with_size(rows: u16, cols: u16) -> Self {
         let rows = rows as usize;

@@ -1,5 +1,5 @@
-use std::io;
 use super::*;
+use std::io;
 
 pub trait DrawBorder {
     fn draw_border(&self, window: &mut Window) -> io::Result<()>;
@@ -14,54 +14,45 @@ impl DrawBorder for Tui {
         window.set_style(styles::BORDER)?;
         window.move_to(0, 0)?;
 
-        if self.show_sidebar() {
+        if self.show_sidebar(window) {
             window.line(tw("╔", 1), text::PIPES, tw("╦═══════╗", 9))?;
-        } else if self.show_outer_border() {
+        } else if self.show_outer_border(window) {
             window.line(tw("╔", 1), text::PIPES, tw("╗", 1))?;
         }
 
         self.draw_border_main(window)?;
-        self.draw_border_tabs(window)?;
-        match self.tab {
-            FocusedTab::Console => self.console_view.draw_border(window)?,
-            FocusedTab::Commands => self.commands_view.draw_border(window)?,
-            FocusedTab::Timeline => self.timeline_view.draw_border(window)?,
-        }
+        self.tabs.draw_border(window)?;
 
-        if self.show_sidebar() {
-            window.line(tw("╚", 1), text::PIPES, tw("╩═══════╝", 9))?;
-        } else if self.show_outer_border() {
-            window.line(tw("╚", 1), text::PIPES, tw("╝", 1))?;
-        }
+        self.draw_border_last(window)?;
         Ok(())
     }
 }
 
 impl Draw for Tui {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
-        self.draw_headings(window)?;
-        ProgramDisplay { interpreter: &self.interpreter, analysis: &self.analysis }.draw(window)?;
-        match self.tab {
-            FocusedTab::Console => self.console_view.draw(window)?,
-            FocusedTab::Commands => self.commands_view.draw(window)?,
-            FocusedTab::Timeline => self.timeline_view.draw(window)?,
+        StackHeading.draw(window)?;
+        ProgramDisplay {
+            interpreter: &self.interpreter,
+            analysis: &self.analysis,
         }
+        .draw(window)?;
+        self.tabs.draw(window)?;
         Ok(())
     }
 }
 
 impl Tui {
     fn draw_border_main(&self, window: &mut Window) -> io::Result<()> {
-        let (_, height) = ProgramView::dimensions(window);
-        if self.show_sidebar() {
+        let Dimensions { cols: _, rows } = ProgramView::dimensions(window);
+        if self.show_sidebar(window) {
             let even_parity = ProgramView::height_parity_even(window);
-            let collapse = self.collapse_stack();
-            for i in 0..height {
-                let sidebar = text::sidebar(i, height, even_parity, collapse);
-                window.line(tw("║", 1), text::SPACES, tw(sidebar, 9))?;
+            let collapse = false; // TODO
+            for i in 0..rows {
+                let sidebar = text::sidebar(i, rows, even_parity, collapse);
+                window.line(tw("║", 1), text::SPACES, sidebar)?;
             }
         } else {
-            for _ in 0..height {
+            for _ in 0..rows {
                 window.line(tw("║", 1), text::SPACES, tw("║", 1))?;
             }
         }
@@ -69,17 +60,28 @@ impl Tui {
         Ok(())
     }
 
-    fn draw_border_tabs(&self, window: &mut Window) -> io::Result<()> {
+    pub fn draw_border_last(&self, window: &mut Window) -> io::Result<()> {
+        if self.show_sidebar(window) {
+            window.line(tw("╚", 1), text::PIPES, tw("╩═══════╝", 9))?;
+        } else if self.show_outer_border(window) {
+            window.line(tw("╚", 1), text::PIPES, tw("╝", 1))?;
+        }
+        Ok(())
+    }
+}
+
+impl DrawBorder for Tabs {
+    fn draw_border(&self, window: &mut Window) -> io::Result<()> {
         let tight = window.width() == 60;
         let heading_lines = {
             if tight {
-                match self.tab {
+                match self.focused {
                     FocusedTab::Console => text::CONSOLE_TAB_FRAME_NORMAL_TIGHT,
                     FocusedTab::Commands => text::COMMANDS_TAB_FRAME_NORMAL_TIGHT,
                     FocusedTab::Timeline => text::TIMELINE_FRAME_NORMAL_TIGHT,
                 }
             } else {
-                match self.tab {
+                match self.focused {
                     FocusedTab::Console => text::CONSOLE_TAB_FRAME_NORMAL,
                     FocusedTab::Commands => text::COMMANDS_TAB_FRAME_NORMAL,
                     FocusedTab::Timeline => text::TIMELINE_FRAME_NORMAL,
@@ -88,28 +90,43 @@ impl Tui {
         };
 
         let text::TabSidebar { top, mid, bot } = {
-            let tab = self.tab == FocusedTab::Timeline;
-            let even = ProgramView::height_parity_even(window) && !self.collapse_stack();
+            let tab = self.focused == FocusedTab::Timeline;
+            let collapse_stack = false; // TODO
+            let even = ProgramView::height_parity_even(window) && !collapse_stack;
             text::tabs_sidebar(tight, tab, even)
         };
 
         window.line(heading_lines[0], text::LINES, top)?;
         window.line(heading_lines[1], text::SPACES, mid)?;
         window.line(heading_lines[2], text::PIPES, bot)?;
-        Ok(())
-    }
 
-    fn draw_headings(&self, window: &mut Window) -> io::Result<()> {
-        StackHeading.draw(window)?;
+        match self.focused {
+            FocusedTab::Console => self.console.draw_border(window),
+            FocusedTab::Commands => self.commands.draw_border(window),
+            FocusedTab::Timeline => self.timeline.draw_border(window),
+        }
+    }
+}
+
+impl Draw for Tabs {
+    fn draw(&self, window: &mut Window) -> io::Result<()> {
         TabHeadings {
-            tab: self.tab,
-            width_bp: self.width_bp,
-            tabbed_both_ways: self.has_tabbed && self.has_back_tabbed,
+            tab: self.focused,
+            tabbed_both_ways: self.has_tabbed_both_ways(),
         }
         .draw(window)?;
-        CursorDisplay { pos: self.interpreter.current_position() }.draw(window)?;
+
         CatLogo.draw(window)?;
-        Ok(())
+
+        CursorDisplay { pos: self.position }.draw(window)?;
+
+        // We draw the tab contents last so the cursor is left
+        // on the focused input prompt
+        match self.focused {
+            FocusedTab::Console => self.console.draw(window),
+            FocusedTab::Commands => self.commands.draw(window),
+            FocusedTab::Timeline => self.timeline.draw(window),
+        }
     }
 }
 
@@ -128,8 +145,9 @@ impl DrawBorder for ConsoleView {
 
 impl Draw for ConsoleView {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
-        let x = window.width() - NON_PROGRAM_WIDTH;
-        let y = window.height() - NON_PROGRAM_HEIGHT + 4;
+        let Dimensions { cols, rows } = ProgramView::dimensions(window);
+        let x = cols;
+        let y = rows + 4;
         let total = 7;
         let bar = 1;
         let offset = total - self.scroll_height;
@@ -159,21 +177,6 @@ impl DrawBorder for CommandsView {
 
 impl Draw for CommandsView {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
-        // Draw scrollbar
-        // let x = window.width() - NON_PROGRAM_WIDTH;
-        // let y = window.height() - NON_PROGRAM_HEIGHT + 4;
-        // let total = 5;
-        // let bar = 1;
-        // let offset = 0;
-        // VerticalScrollbar {
-        //     x,
-        //     y,
-        //     total,
-        //     bar,
-        //     offset,
-        // }
-        // .draw(window)?;
-
         // Draw command output
         window.set_style(styles::PROGRAM_TEXT)?;
         let max_width = (window.width() - NON_PROGRAM_WIDTH) as usize;
@@ -181,7 +184,11 @@ impl Draw for CommandsView {
             let x = 1;
             let y = window.height() - 8 + i;
             window.move_to(x, y)?;
-            let line = if line.len() > max_width { &line[0..max_width] } else { line };
+            let line = if line.len() > max_width {
+                &line[0..max_width]
+            } else {
+                line
+            };
             window.print(tw(line, line.chars().count() as u16))?;
         }
 
@@ -215,7 +222,7 @@ impl Draw for TimelineView {
         let x = 1;
         let y = window.height() - 3;
         let total = window.width() - NON_PROGRAM_WIDTH;
-        let bar = total / 4;
+        let bar = 0;
         let offset = 0;
         HorizontalScrollbar {
             x,
@@ -239,8 +246,12 @@ impl Draw for StackHeading {
 
 impl Draw for TabHeadings {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
+        let Dimensions {
+            cols: _,
+            rows: program_rows,
+        } = ProgramView::dimensions(window);
         let x = 2;
-        let y = window.height() - NON_PROGRAM_HEIGHT + 2;
+        let y = program_rows + 2;
         window.move_to(x, y)?;
         window.set_style(styles::CYAN_HEADING)?;
         window.print(text::BEFUNGE_DEBUGGER)?;
@@ -257,7 +268,7 @@ impl Draw for TabHeadings {
         window.move_right(3)?;
         window.print(text::TIMELINE)?;
 
-        if self.width_bp == WidthBreakPoint::Wide && !self.tabbed_both_ways {
+        if window.width() > WIDE_WIDTH && !self.tabbed_both_ways {
             window.move_right(4)?;
             window.set_style(styles::GRAY_HEADING)?;
             window.print(text::TAB_SWITCH_HINT)?;
@@ -290,7 +301,9 @@ impl HorizontalScrollbar {
 }
 
 struct VerticalScrollbar {
+    /// x position in overall window space
     x: u16,
+    /// y position in overall window space
     y: u16,
     total: u16,
     bar: u16,
@@ -300,12 +313,8 @@ struct VerticalScrollbar {
 impl VerticalScrollbar {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         window.set_style(styles::CYAN_HEADING)?;
-        window.move_to(self.x, self.y)?;
         for i in 0..self.total {
-            window.move_to(
-                window.width() - NON_PROGRAM_WIDTH,
-                window.height() - NON_PROGRAM_HEIGHT + 4 + i,
-            )?;
+            window.move_to(self.x, self.y + i)?;
             if i < self.offset {
                 window.print(text::SCROllBAR_EMPTY)?;
             } else if i < self.offset + self.bar {
@@ -318,26 +327,39 @@ impl VerticalScrollbar {
     }
 }
 
+struct ProgramDisplay<'a> {
+    analysis: &'a PathAnalysis,
+    interpreter: &'a Interpreter<VecIO>,
+}
+
 impl<'a> Draw for ProgramDisplay<'a> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
-        let (width, height) = ProgramView::dimensions(window);
+        let Dimensions { cols, rows } = ProgramView::dimensions(window);
         let space = self.interpreter.space();
-        for i in 0..height {
-            window.move_to(1, i + 1)?;
-            for j in 0..width {
+        for y in 0..rows {
+            window.move_to(1, y + 1)?;
+            let mut skipped = 0;
+            for x in 0..cols {
                 let pos = Position {
-                    x: j as u8,
-                    y: i as u8,
+                    x: x as u8,
+                    y: y as u8,
                 };
                 let cell = space.get_cell(pos);
                 let state = self.analysis.cell_states.get_cell(pos);
                 let c = char::from_u32(cell.0 as u32).unwrap_or('�');
+
+                if c == ' ' && state.modes() == analyze::Modes::None {
+                    skipped += 1;
+                    continue;
+                }
+
+                if skipped != 0 {
+                    window.set_style(styles::PROGRAM_TEXT)?;
+                    window.move_right(skipped)?;
+                    skipped = 0;
+                }
+
                 if c == ' ' {
-                    if state.modes() == analyze::Modes::None {
-                        window.set_style(styles::PROGRAM_TEXT)?;
-                        window.print_char(' ')?;
-                        continue;
-                    }
                     if state.modes() == analyze::Modes::Quoted {
                         window.set_style(styles::VISITED_QUOTED)?;
                         window.print_char(' ')?;
@@ -355,21 +377,18 @@ impl<'a> Draw for ProgramDisplay<'a> {
                 }
 
                 let style = match state.modes() {
-                    analyze::Modes::None => {
-                        eprintln!("Unstyled char {} ({:?})", c, state);
-                        styles::PROGRAM_TEXT
-                    },
+                    analyze::Modes::None => styles::PROGRAM_TEXT,
                     analyze::Modes::Quoted => styles::VISITED_QUOTED,
-                    analyze::Modes::Normal => {
-                        match c {
-                            c if c.is_ascii_digit() => styles::VISITED_NUMBER,
-                            '^' | 'v' | '<' | '>' | '?' | '#' | '_' | '|' => styles::VISITED_DIR,
-                            '.' | ',' | '~' | '&' => styles::VISITED_IO,
-                            '+' | '-' | '*' | '/' | '%' | ':' | '$' | '\\' | '`' | '!' => styles::VISITED_STACK,
-                            'p' | 'g' => styles::VISITED_PG,
-                            '@' => styles::VISITED_RED,
-                            _ => styles::VISITED_NORMAL,
+                    analyze::Modes::Normal => match c {
+                        c if c.is_ascii_digit() => styles::VISITED_NUMBER,
+                        '^' | 'v' | '<' | '>' | '?' | '#' | '_' | '|' => styles::VISITED_DIR,
+                        '.' | ',' | '~' | '&' => styles::VISITED_IO,
+                        '+' | '-' | '*' | '/' | '%' | ':' | '$' | '\\' | '`' | '!' => {
+                            styles::VISITED_STACK
                         }
+                        'p' | 'g' => styles::VISITED_PG,
+                        '@' => styles::VISITED_RED,
+                        _ => styles::VISITED_NORMAL,
                     },
                     analyze::Modes::Both => styles::VISITED_NORMAL,
                 };

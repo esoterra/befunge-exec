@@ -1,4 +1,4 @@
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Default)]
 /// Represents a 2d position in the program space
 pub struct Position {
     /// The x dimension

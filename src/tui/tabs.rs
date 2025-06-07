@@ -7,6 +7,35 @@ use thiserror::Error;
 
 use crate::core::Position;
 
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
+pub struct Tabs {
+    pub focused: FocusedTab,
+
+    pub has_tabbed: bool,
+    pub has_back_tabbed: bool,
+
+    pub console: ConsoleView,
+    pub commands: CommandsView,
+    pub timeline: TimelineView,
+    pub position: Position,
+
+    pub dirty: bool,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum FocusedTab {
+    Console,
+    #[default]
+    Commands,
+    Timeline,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ConsoleView {
+    pub scroll_height: u16,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CommandsView {
     pub output: Cow<'static, str>,
     pub input_contents: String,
@@ -14,10 +43,70 @@ pub struct CommandsView {
     pub mode: Mode,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Mode {
     Running,
     Stepping { n: u16 },
     Paused,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct TimelineView;
+
+impl Tabs {
+    pub fn on_key_event(&mut self, event: KeyEvent) {
+        match event {
+            KeyEvent {
+                code: KeyCode::BackTab,
+                ..
+            } => {
+                self.focus_previous();
+            }
+            KeyEvent {
+                code: KeyCode::Tab, ..
+            } => {
+                self.focus_next();
+            }
+            _ => match self.focused {
+                FocusedTab::Console => {}
+                FocusedTab::Commands => {
+                    self.commands.on_key_event(event);
+                    self.dirty = true;
+                }
+                FocusedTab::Timeline => {}
+            },
+        }
+    }
+
+    fn focus_next(&mut self) {
+        self.has_tabbed = true;
+        self.focused = match self.focused {
+            FocusedTab::Console => FocusedTab::Commands,
+            FocusedTab::Commands => FocusedTab::Timeline,
+            FocusedTab::Timeline => FocusedTab::Console,
+        };
+        self.dirty = true;
+    }
+
+    fn focus_previous(&mut self) {
+        self.has_back_tabbed = true;
+        self.focused = match self.focused {
+            FocusedTab::Console => FocusedTab::Timeline,
+            FocusedTab::Commands => FocusedTab::Console,
+            FocusedTab::Timeline => FocusedTab::Commands,
+        };
+        self.dirty = true;
+    }
+
+    pub fn has_tabbed_both_ways(&self) -> bool {
+        self.has_back_tabbed && self.has_tabbed
+    }
+}
+
+impl Default for ConsoleView {
+    fn default() -> Self {
+        Self { scroll_height: 0 }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -38,7 +127,7 @@ impl fmt::Display for Command {
             Command::Run => write!(f, "Run"),
             Command::Pause => write!(f, "Pause"),
             Command::Breakpoint { pos } => write!(f, "Breakpoint at ({}, {})", pos.x, pos.y),
-            Command::Quit => write!(f, "Quit")
+            Command::Quit => write!(f, "Quit"),
         }
     }
 }
@@ -97,18 +186,23 @@ impl CommandsView {
                         Command::Help => {
                             self.output = Cow::Borrowed(HELP_OUTPUT);
                         }
-                        Command::Step { n} => {
+                        Command::Step { n } => {
                             if let Mode::Stepping { n: old } = self.mode {
                                 let total = old + n;
                                 self.output = match n {
-                                    1 => Cow::Owned(format!("Taking 1 more step ({} total)", total)),
-                                    _ => Cow::Owned(format!("Taking {} more steps ({} total)", n, total))
+                                    1 => {
+                                        Cow::Owned(format!("Taking 1 more step ({} total)", total))
+                                    }
+                                    _ => Cow::Owned(format!(
+                                        "Taking {} more steps ({} total)",
+                                        n, total
+                                    )),
                                 };
                                 self.mode = Mode::Stepping { n: total };
                             } else {
                                 self.output = match n {
                                     1 => Cow::Owned(format!("Taking {} steps", n)),
-                                    _ => Cow::Borrowed("Taking 1 step")
+                                    _ => Cow::Borrowed("Taking 1 step"),
                                 };
                                 self.mode = Mode::Stepping { n };
                             }
@@ -116,15 +210,15 @@ impl CommandsView {
                         Command::Run => {
                             self.mode = Mode::Running;
                             self.output = Cow::Borrowed("Running...");
-                        },
+                        }
                         Command::Pause => {
                             self.mode = Mode::Paused;
                             self.output = Cow::Borrowed("Paused");
                         }
-                        Command::Breakpoint { pos } => {},
+                        Command::Breakpoint { pos } => {}
                         Command::Quit => {}
                     }
-                },
+                }
                 Err(error) => {
                     let error_string = error.to_string();
                     eprintln!("{}", error_string);
@@ -152,13 +246,13 @@ impl CommandsView {
                     } else {
                         (Command::Step { n: 1 }, 0)
                     }
-                },
+                }
                 "r" | "run" => (Command::Run, 0),
                 "p" | "pause" => (Command::Pause, 0),
                 "b" | "breakpoint" => {
                     let command = Command::Breakpoint { pos: todo!() };
                     (command, 2)
-                },
+                }
                 "q" | "quit" => (Command::Quit, 0),
                 "" => return Ok(None),
                 arg => return Err(CommandError::UnknownCommand { arg }),
@@ -191,8 +285,7 @@ enum CommandError<'a> {
     UnknownCommand { arg: &'a str },
 }
 
-const HELP_OUTPUT: &str =
-    "step  │ s [n]     │ takes a step\nrun   │ r [speed] │ runs the program\npause │ p         │ pauses the execution\nbreak │ b <x> <y> │ places a breakpoint\nquit  │ q         │ exits the debugger";
+const HELP_OUTPUT: &str = "step  │ s [n]     │ takes a step\nrun   │ r [speed] │ runs the program\npause │ p         │ pauses the execution\nbreak │ b <x> <y> │ places a breakpoint\nquit  │ q         │ exits the debugger";
 
 fn try_collect<'a>(mut args: impl Iterator<Item = &'a str>) -> Option<Vec<&'a str>> {
     if let Some(arg) = args.next() {

@@ -6,8 +6,9 @@ use crossterm::cursor::{MoveRight, MoveTo, MoveToNextLine};
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::style::{ContentStyle, SetStyle};
 use crossterm::terminal::{
-    BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate, EnterAlternateScreen,
-    LeaveAlternateScreen, SetTitle, disable_raw_mode, enable_raw_mode, size,
+    BeginSynchronizedUpdate, Clear, ClearType, DisableLineWrap, EnableLineWrap,
+    EndSynchronizedUpdate, EnterAlternateScreen, LeaveAlternateScreen, SetTitle, disable_raw_mode,
+    enable_raw_mode, size,
 };
 use crossterm::{QueueableCommand, execute};
 
@@ -49,15 +50,17 @@ impl Window {
         enable_raw_mode()?;
         execute!(self.stdout, EnterAlternateScreen)?;
         execute!(self.stdout, Clear(ClearType::All))?;
+        execute!(self.stdout, DisableLineWrap)?;
         execute!(self.stdout, EnableMouseCapture)?;
         Ok(())
     }
 
     pub fn close(&mut self) -> io::Result<()> {
         disable_raw_mode()?;
+        execute!(self.stdout, DisableMouseCapture)?;
+        execute!(self.stdout, EnableLineWrap)?;
         execute!(self.stdout, Clear(ClearType::All))?;
         execute!(self.stdout, LeaveAlternateScreen)?;
-        execute!(self.stdout, DisableMouseCapture)?;
         Ok(())
     }
 
@@ -72,6 +75,10 @@ impl Window {
 
     pub fn clear(&mut self) -> io::Result<()> {
         execute!(self.stdout, Clear(ClearType::All))
+    }
+
+    pub fn clear_down(&mut self) -> io::Result<()> {
+        execute!(self.stdout, Clear(ClearType::FromCursorDown))
     }
 
     // Terminal Operation Wrappers
@@ -124,6 +131,7 @@ impl Window {
                 used_space,
                 self.width
             );
+            self.stdout.queue(MoveToNextLine(1))?;
             return Ok(());
         }
         let n = self.width - pre.width() - end.width();

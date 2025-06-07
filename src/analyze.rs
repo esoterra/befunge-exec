@@ -1,15 +1,18 @@
 use core::fmt;
 use std::collections::VecDeque;
 
-use crate::{core::{Cell, Direction, Mode, Position}, space::Space};
+use crate::{
+    core::{Cell, Direction, Mode, Position},
+    space::Space,
+};
 
 pub fn analyze_path(space: &Space<Cell>) -> PathAnalysis {
     PathAnalysisState::new(space).analyze()
 }
 
 pub struct PathAnalysis {
-    pub cell_states: Space<State>
-} 
+    pub cell_states: Space<State>,
+}
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub struct State(u8);
@@ -72,7 +75,7 @@ pub enum Modes {
     None,
     Quoted,
     Normal,
-    Both
+    Both,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,7 +83,7 @@ pub enum Directions {
     None,
     Horizontal,
     Vertical,
-    Both
+    Both,
 }
 
 impl State {
@@ -106,7 +109,7 @@ impl State {
             (false, false, false, true) => Directions::Horizontal,
             (true, _, false, false) => Directions::Vertical,
             (false, true, false, false) => Directions::Vertical,
-            _ => Directions::Both
+            _ => Directions::Both,
         }
     }
 
@@ -128,7 +131,7 @@ impl State {
 struct PathAnalysisState<'src> {
     space: &'src Space<Cell>,
     states: Space<State>,
-    queue: VecDeque<(Position, Direction, Mode)>
+    queue: VecDeque<(Position, Direction, Mode)>,
 }
 
 impl<'src> PathAnalysisState<'src> {
@@ -136,7 +139,11 @@ impl<'src> PathAnalysisState<'src> {
         let states: Space<State> = Space::with_size(space.rows(), space.cols());
         let mut queue: VecDeque<(Position, Direction, Mode)> = Default::default();
         queue.push_back((Position::ORIGIN, Direction::Right, Mode::Normal));
-        Self { space, states, queue }
+        Self {
+            space,
+            states,
+            queue,
+        }
     }
 
     fn analyze(mut self) -> PathAnalysis {
@@ -154,7 +161,6 @@ impl<'src> PathAnalysisState<'src> {
                 continue;
             }
             self.states.set_cell(pos, new);
-            eprintln!("Set {:?} to {:?} : {:?}", pos, new, self.states.get_cell(pos));
 
             // Actually update the mode
             let mode = match (cell.0, mode) {
@@ -202,13 +208,15 @@ impl<'src> PathAnalysisState<'src> {
                 }
                 b'@' => {
                     continue;
-                },
+                }
                 _ => {
                     self.forward(pos, dir, mode);
                 }
             }
         }
-        PathAnalysis { cell_states: self.states }
+        PathAnalysis {
+            cell_states: self.states,
+        }
     }
 
     fn forward(&mut self, pos: Position, dir: Direction, mode: Mode) {

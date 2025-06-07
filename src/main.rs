@@ -80,10 +80,10 @@ fn run(path: PathBuf) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::core::{Direction, Position, Cell};
+    use super::core::{Cell, Direction, Position};
     use super::interpreter::{Interpreter, Status};
-    use crate::space::Space;
     use crate::io::VecIO;
+    use crate::space::Space;
 
     type DebugInterpreter<'src> = Interpreter<VecIO>;
 
@@ -198,7 +198,10 @@ mod tests {
         // Verify that the stack is now empty
         assert_eq!(EMPTY_STACK, interpreter.stack());
         // Verify that the value 2 was placed into the specified position
-        assert_eq!(Cell(2), interpreter.space().get_cell(Position { x: 1, y: 0 }));
+        assert_eq!(
+            Cell(2),
+            interpreter.space().get_cell(Position { x: 1, y: 0 })
+        );
     }
 
     #[test]

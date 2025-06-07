@@ -59,3 +59,9 @@ Instead of going to a full stack stack that lets you swap and interact with both
 
 * The skip instruction `;` that jumps to the next one of itself
   * e.g. `12;34;+` -> `3`
+
+# References
+
+https://esoteric.codes/blog/befunge
+https://catseye.tc/view/The-Dossier/article/Befunge%20Silver%20Jubilee%20Retrospective.md
+https://git.catseye.tc/Befunge-93/blob/master/eg/anagram.bf
