@@ -1,21 +1,5 @@
 # TUI Designs
 
-## Characters
-
-```
-╔╗
-╚╝
-
-╬
-
-╦
-║
-╩
-
-╠═╣
-```
-
-
 ## Console Tab
 
 ```
