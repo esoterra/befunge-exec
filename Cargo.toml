@@ -1,7 +1,14 @@
 [package]
 name = "bft"
+description = "A collection of command line tools for executing, analyzing, and visualizing Befunge code."
+keywords = ["befunge", "esoteric", "interpreter", "cli", "terminal"]
+categories = ["command-line-interface", "command-line-utilities", "development-tools"]
+homepage = "https://github.com/esoterra/befunge-tools"
+repository = "https://github.com/esoterra/befunge-tools"
+readme = "README.md"
 version = "0.1.0"
 authors = ["Robin Brown"]
+license = "MIT"
 edition = "2024"
 
 [dependencies]
