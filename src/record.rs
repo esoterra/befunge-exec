@@ -117,43 +117,43 @@ impl Record for StdOutEventLog {
     }
 }
 
-pub struct StdErrEventLog;
+pub struct EventLog;
 
-impl Record for StdErrEventLog {
+impl Record for EventLog {
     fn start_step(&mut self, at: Position, instruction: GridCell) {
-        eprintln!("Started step at {} with opcode '{}'", at, instruction.0);
+        log::info!("Started step at {} with opcode '{}'", at, instruction.0);
     }
 
     fn rollback_step(&mut self) {
-        eprintln!("Rollback step");
+        log::info!("Rollback step");
     }
 
     fn commit_step(&mut self) {
-        eprintln!("Commit step");
+        log::info!("Commit step");
     }
 
     fn replace(&mut self, at: Position, old: GridCell, new: GridCell) {
-        eprintln!("Replace '{}' with '{}' at {}", old.0, new.0, at);
+        log::info!("Replace '{}' with '{}' at {}", old.0, new.0, at);
     }
 
     fn pop(&mut self, old: StackCell) {
-        eprintln!("Popped '{}' from stack", old.0);
+        log::info!("Popped '{}' from stack", old.0);
     }
 
     fn pop_bottom(&mut self) {
-        eprintln!("Popped while at bottom of stack")
+        log::info!("Popped while at bottom of stack")
     }
 
     fn push(&mut self, new: StackCell) {
-        eprintln!("Pushed '{}' onto the stack", new.0);
+        log::info!("Pushed '{}' onto the stack", new.0);
     }
 
     fn enter_quote(&mut self) {
-        eprintln!("Enter quote mode");
+        log::info!("Enter quote mode");
     }
 
     fn exit_quote(&mut self) {
-        eprintln!("Exit quote mode")
+        log::info!("Exit quote mode")
     }
 }
 

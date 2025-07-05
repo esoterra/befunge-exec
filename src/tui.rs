@@ -51,7 +51,7 @@ pub fn run_tui(name: String, program: Vec<u8>) -> Result<(), crate::Error> {
             let event = crossterm::event::read()?;
             match event {
                 Event::Resize(width, height) => {
-                    // eprintln!("Resized to ({}, {})", width, height);
+                    log::info!("Resized to ({}, {})", width, height);
                     window.set_size(width, height);
                     resized = true;
                 }
@@ -76,7 +76,7 @@ pub fn run_tui(name: String, program: Vec<u8>) -> Result<(), crate::Error> {
 
         let now = Instant::now();
         if now >= next_tick {
-            eprintln!("Slow frame!!");
+            log::debug!("Slow frame!!");
         }
     }
 
@@ -166,12 +166,12 @@ impl Tui {
 
         if redraw_all {
             // redraw everything on resize
-            eprintln!("Draw everything");
+            log::info!("Draw everything");
             window.clear()?;
             self.draw_border(window)?;
             self.draw(window)?;
         } else if redraw_bot {
-            eprintln!("Draw tabs");
+            log::info!("Draw tabs");
             self.tabs.dirty = false;
             window.move_to(WindowX(0), TabHeadingY(0))?;
             window.clear_down()?;
@@ -185,7 +185,7 @@ impl Tui {
 
         // If top wasn't redrawn and the debugger has updated, redraw the sidebar
         if !redraw_top && debugger_updated {
-            eprintln!("Draw sidebar");
+            log::info!("Draw sidebar");
             let sidebar = Sidebar {
                 debugger: &self.debugger,
             };
@@ -194,7 +194,7 @@ impl Tui {
         }
         // If bottom wasn't redrawn and the position has changed, redraw the position
         if !redraw_bot && old_pos != new_pos {
-            eprintln!("Draw cursor position");
+            log::info!("Draw cursor position");
             CursorDisplay { pos: new_pos }.draw(window)?;
         }
         // Move the terminal cursor to the focused tab

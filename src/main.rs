@@ -15,6 +15,8 @@ use std::time::Duration;
 use std::{cmp::min, fs};
 
 use clap::{Parser, Subcommand};
+use ftail::Ftail;
+use log::LevelFilter;
 use space::Space;
 use thiserror::Error;
 
@@ -35,6 +37,9 @@ enum Command {
     Debug {
         /// Path of program to run.
         path: PathBuf,
+        /// Log level
+        #[arg(long)]
+        log_level: Option<LevelFilter>
     },
 }
 
@@ -50,17 +55,50 @@ fn main() {
     let cli = Cli::parse();
     let result = match cli.command {
         Command::Run { path } => run(path),
-        Command::Debug { path } => {
+        Command::Debug { path, log_level } => {
+            init_logging(log_level);
             let name = path.file_name().unwrap().to_string_lossy().into_owned();
             let program = fs::read(path).unwrap();
             tui::run_tui(name, program)
         }
     };
     if let Err(error) = result {
-        eprintln!("{:?}", error);
+        log::error!("{:?}", error);
         std::process::exit(1);
     }
     std::process::exit(0)
+}
+
+fn init_logging(log_level: Option<LevelFilter>) {
+    // Don't log at all if log level is off
+    if matches!(log_level, Some(LevelFilter::Off)) {
+        return;
+    }
+    // Default to DEBUG
+    let level = log_level.unwrap_or(log::LevelFilter::Debug);
+
+    let mut path = PathBuf::from(std::env::var("HOME").unwrap());
+    path.push(".bft/logs");
+    if !path.exists() {
+        std::fs::create_dir_all(&path).unwrap();
+    }
+
+    // Determine the name of the file
+    let t = chrono::Utc::now().format("%y-%m-%d-%H-%S");
+    let file_name = format!("bft_log_{}.txt", t);
+    path.push(file_name);
+    let mut counter = 0;
+    while path.exists() {
+        path.set_file_name(format!("bft_log_{}-({}).txt", t, counter));
+        counter += 1;
+    }
+
+    // Create the logger and print if there's an error.
+    let logger = Ftail::new().single_file(&path, false, level).init();
+    if let Err(error) = logger {
+        log::info!("{:?}", error);
+        std::process::exit(1);
+    }
 }
 
 fn run(path: PathBuf) -> Result<(), Error> {

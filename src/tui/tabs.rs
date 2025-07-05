@@ -309,7 +309,7 @@ impl ListenForKey for CommandsView {
                 }
                 Err(error) => {
                     let error_string = error.to_string();
-                    eprintln!("{}", error_string);
+                    log::error!("{:?}", error);
                     self.output = Cow::Owned(error_string);
                     None
                 }

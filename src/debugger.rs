@@ -78,7 +78,7 @@ impl Debugger {
                     Status::Completed => {}
                     Status::Waiting => {}
                     Status::Terminated => self.state = State::Halted,
-                    Status::Error(interpreter_error) => eprintln!("{}", interpreter_error),
+                    Status::Error(interpreter_error) => log::error!("{}", interpreter_error),
                 }
             }
         }

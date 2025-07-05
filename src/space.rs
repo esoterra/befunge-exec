@@ -102,10 +102,8 @@ impl<Cell> Space<Cell> {
         let x = pos.x as usize;
         let y = pos.y as usize;
         if x >= self.grid.cols() || y >= self.grid.rows() {
-            // eprintln!("Insert into map {:?} -> {:?}", pos, cell);
             self.map.insert(pos, cell);
         } else {
-            // eprintln!("Insert into grid ({}, {}) -> {:?}", x, y, cell);
             self.grid[(y, x)] = cell;
         }
         self.cols = std::cmp::max(self.cols, x + 1);

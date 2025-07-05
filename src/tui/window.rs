@@ -106,6 +106,7 @@ impl Window {
     }
 
     pub fn init(&mut self) -> io::Result<()> {
+        log::info!("Initializing TUI window");
         enable_raw_mode()?;
         execute!(self.stdout, EnterAlternateScreen)?;
         execute!(self.stdout, Clear(ClearType::All))?;
@@ -115,6 +116,7 @@ impl Window {
     }
 
     pub fn close(&mut self) -> io::Result<()> {
+        log::info!("Closing TUI window");
         disable_raw_mode()?;
         execute!(self.stdout, DisableMouseCapture)?;
         execute!(self.stdout, EnableLineWrap)?;
@@ -196,7 +198,7 @@ impl Window {
         print!("{}", pre.as_ref());
         let used_space = pre.width() + end.width();
         if used_space > self.width {
-            eprintln!(
+            log::error!(
                 "Tried to draw '{}' '{}'* '{}' which used {} columns but {} were available",
                 pre.as_ref(),
                 mid.one(),

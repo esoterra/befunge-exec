@@ -3,6 +3,8 @@
 - [X] Skip over empty space correctly
 - [X] Implement IO buffer
 - [X] Make stack use 32-bit cells
+- [X] Generate log files at `~/.bft/logs` instead of using stderr
+- [ ] Validate conformance to Befunge 93
 - [ ] Render 32-bit cells on sidebar
 - [ ] Full 32-bit everywhere + unicode with b93 compat flag
 - [ ] Shebang! Support

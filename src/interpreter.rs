@@ -375,7 +375,7 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
             }
             b' ' => Status::Completed,
             op => {
-                eprintln!("Invalid opcode: {}", op);
+                log::error!("Invalid opcode: {}", op);
                 return Status::Error(InterpreterError::InvalidOpcode(op));
             }
         };
@@ -395,7 +395,7 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
             self.move_auto();
 
             if self.cursor.pos == start {
-                eprintln!("Infinite loop detected at {:?}", start);
+                log::error!("Infinite loop detected at {:?}", start);
                 return Some(Status::Error(InterpreterError::InfiniteLoop));
             }
         }

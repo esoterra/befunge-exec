@@ -50,6 +50,10 @@ Runs the program and
 Launches the interactive debugger Terminal User Interface (TUI) with the specified program loaded in.
 
 <figure>
-  <img src="./docs/tui_example.png" alt="A terminal window with the title 'Befunge Tools: lessmore.b93' that is displaying the Terminal User Interface (TUI) of a debugger for the Befunge esoteric programming language. It is made up of Box Drawing Characters and styled with ANSI color codes. It has a main program area displaying a program for a simple guessing game that picks a random number that you try to guess,, a sidebar with an empty table titled Stack, and a set of tabs at the bottom called Console, Commands, and Timeline. The Commands tab is currently selected and shows an empty user input prompt and help output instructing the user on how to operate the debugger.">
-  <figcaption align="center">The interactive debugger UI</figcaption>
+  <a href="https://asciinema.org/a/jePiNWuNsG1lP4csxoTmJMhHT"><img src="https://asciinema.org/a/jePiNWuNsG1lP4csxoTmJMhHT.png" alt="A terminal window displaying the Terminal User Interface (TUI) of a debugger for the Befunge esoteric programming language. It is made up of Box Drawing Characters and styled with ANSI color codes. It has a main program area displaying a program for a simple guessing game that picks a random number that you try to guess,, a sidebar with an empty table titled Stack, and a set of tabs at the bottom called Console, Commands, and Timeline."></a>
+  <figcaption align="center">The interactive debugger UI. Click it to see a demo at asciinema.org!</figcaption>
 </figure>
+
+### Logging
+
+The debugger automatically saves logs to `~/.bft/logs`. The log level is controlled by the `--log-level` argument.
