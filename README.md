@@ -1,71 +1,55 @@
-# befunge-exec
+<div align="center">
+  <h1>Befunge Tools - <code>bft</code></h1>
 
-`befunge-exec` is a simple command line application that acts as a Befunge interpreter and debugger.
-
-I may rename it in the near future ¯\\\_(ツ)\_/¯.
+  <p>
+    <strong>A collection of command line tools for executing, analyzing, and visualizing Befunge code.</strong>
+  </p>
+</div>
 
 ## Befunge
 
-Befunge 93 is an esoteric programming language where programs are 2 dimensional spaces of bytes.
-They are stored ascii text files or equivalently utf-8 files which contain no larger than 1-byte values.
-To execute the file a cursor moves through the space interpreting each byte as a command
-that affects the position & direction of the cursor, the stack, and the space itself.
+[Befunge 93](https://esolangs.org/wiki/Befunge) is an esoteric programming language where
+* **programs are 2-dimensional grids** of `u8` cells, not sequences of lines;
+* **the program counter is 2-dimensional** and can move up, down, left, or right!
+* **instructions are ASCII characters** and occupy a single cell in the grid;
+* **instructions pop/push** from a stack of `i32` cells;
+* **programs can modify themselves** to store data and change program flow.
 
-To learn more about Befunge 93, check out the [Befunge page on esolangs.org](https://esolangs.org/wiki/Befunge).
+Befunge Tools currently targets Befunge 93 except that programs may be larger than 80x25. In the future, this may be updated to a new dialect with a Befunge 93 compatibility mode.
 
-The `befunge-exec` tooling faithfully supports the Befunge 93 spec, except the restriction that programs
-must be 80x25 in size is relaxed. In the future, this may be updated to a new dialect
-that supports Unicode Scalar Values instead of ASCII bytes, 32-bit values, and other features.
+## Befunge Tools
 
-## Modes
+Befunge Tools is a collection of command line tools for executing, analyzing, and visualizing Befunge code.
 
-`befunge-exec` has three modes: run, debug, and tui
-- Run: 
-- Debug: A simple command-line interpreter that provides basic operations.
-- TUI: A work-in-progress Terminal User Interface (TUI) for visualizing and debugging befunge programs.
+- [X] the `run` command which is a no-frills Befunge interpreter.
+- [X] the `debug` command which launches an interactive TUI environment.
+  - [X] command tab with debugger run/step/pause functionality
+  - [X] console tab with interactive virtual terminal
+  - [ ] (Planned) timeline tab with time-travel debugging
+  - [X] program visualization with path-aware highlighting
+  - [X] stack visualization sidebar
+  - [X] breakpoint support
+  - [ ] (Planned) Built-in `asciinema` recording
 
-### Run
+## Run
 
-Executes the program, reads input from standard input, writes output to standard output, logs interpreter errors to standard error, and exits with status code 0 unless the interpreter encounters an error.
+> Execute `bft run ./path/to/file.b93` in your terminal.
 
-### Debug
+Runs the program and
+* reads input from standard input,
+* writes output to standard output,
+* logs interpreter errors to standard error,
+* exits with status code 0 unless the interpreter encounters an error.
 
-Starts the debugger and provides a prompt for commands that allows the user to set breakpoints, step, run, etc. Input is provided by running the `i` command. Output of running/stepping programs is printed to standard output.
+## Debug - TUI Debugger
 
-### TUI
+> Execute `bft debug ./path/to/file.b93 2> log.txt` in your terminal.
 
-> Note: The TUI is a WIP and does not yet support all of its intended features yet.
+(Logging will probably become configurable or automatically placed in files in the future, but for now it is printed to standard error by default for development purposes and redirecting it is recommended/expected)
 
-* The program state is displayed on the left-hand side and colored in a semantically-aware way.
-* The current contents of the stack are visualized on the right-hand side.
-* The bottom area contains tabs for console input/output, entering commands to affect the debugger execution (default tab), and a timeline tab that will eventually contain a log of commands and time-travel debugger feature.
+Launches the interactive debugger Terminal User Interface (TUI) with the specified program loaded in.
 
-![A terminal window with the title "befunge-exec: lessmore.b93" that is displaying the Terminal User Interface (TUI) of a debugger for the Befunge esoteric programming language. It is made up of Box Drawing Characters and styled with ANSI color codes. It has a main program area displaying a program for a simple guessing game that picks a random number that you try to guess,, a sidebar with an empty table titled Stack, and a set of tabs at the bottom called Console, Commands, and Timeline. The Commands tab is currently selected and shows an empty user input prompt and help output instructing the user on how to operate the debugger.](./docs/tui_example.png)
-
-## Analysis Features
-
-I intend for `befunge-exec` to embed powerful Befunge static and dynamic analysis features that enhance the user's ability to understand a given Befunge program and ensure that it does what it should or determine why it doesn't.
-
-### Naive Path Analysis (Implemented)
-
-This static analysis pass performs a breadth-first search, using a queue, of the cells reachable by the program assuming it does not modify itself in a way that changes cells that are visited/executed. This is what makes it possible to highlight characters that are executed as instructions differently from characters visited in quote mode and from those that aren't visited at all, and draw lines along the paths the cursor takes through empty space.
-
-### Symbolic Evaluation (Not Implemented)
-
-This static analysis pass would symbolically-execute the program
-* Tracking the height of the stack and what is known about each cell, like if the value is known or known to be within a range.
-* Literally executing deterministic instructions whose operands are known or tracking what is known about the output on the stack
-* Forking when a `?` a `|`/`_` with input that can't be statically known to be zero or non-zero is encountered
-* ...
-
-### Time-travel Debugging (Not Implemented)
-
-By keeping a log of each instruction that was executed and enough information to replay the execution forwards and also rewind it backwards, we would be able to step forwards/backwards and do things like step backwards from a breakpoint to see how it was reached.
-
-### Assertions (Not Implemented)
-
-This is more speculative, but the idea would be to define a syntax for specifying invariants that are statically or dynamically asserted to be true.
-
-In dynamic checking, we would just ensure that the invariant isn't broken during execution.
-
-For static checking, we would take advantage of symbolic evaluation to ensure that that it isn't possible for the invariant to be broken.
+<figure>
+  <img src="./docs/tui_example.png" alt="A terminal window with the title 'Befunge Tools: lessmore.b93' that is displaying the Terminal User Interface (TUI) of a debugger for the Befunge esoteric programming language. It is made up of Box Drawing Characters and styled with ANSI color codes. It has a main program area displaying a program for a simple guessing game that picks a random number that you try to guess,, a sidebar with an empty table titled Stack, and a set of tabs at the bottom called Console, Commands, and Timeline. The Commands tab is currently selected and shows an empty user input prompt and help output instructing the user on how to operate the debugger.">
+  <figcaption align="center">The interactive debugger UI</figcaption>
+</figure>

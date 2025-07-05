@@ -1,6 +1,19 @@
-use crate::analyze::Directions;
+use crate::{
+    analyze::{self, Directions},
+    core::Position,
+    debugger::Debugger,
+    terminal::VirtualTerminal,
+    tui::{
+        Tui,
+        layout::{self, ProgramX, ProgramY, SidebarX, SidebarY, TabHeadingY, TabY, program_cols},
+        styles,
+        tabs::{CommandsView, ConsoleView, FocusedTab, Tabs, TimelineView},
+        text::{self, t, tw},
+        window::{ConvertToWindowSpace, Window, WindowX, WindowY, window_coord},
+    },
+};
 
-use super::*;
+use core::str;
 use std::io;
 
 pub trait DrawBorder {
@@ -14,7 +27,8 @@ pub trait Draw {
 impl DrawBorder for Tui {
     fn draw_border(&self, window: &mut Window) -> io::Result<()> {
         window.set_style(styles::BORDER)?;
-        window.move_to(0, 0)?;
+        let (x, y) = window_coord(0, 0);
+        window.move_to(x, y)?;
 
         if self.show_sidebar(window) {
             window.line(tw("╔", 1), text::PIPES, tw("╦═══════╗", 9))?;
@@ -41,13 +55,13 @@ impl Draw for Tui {
             debugger: &self.debugger,
         }
         .draw(window)?;
-        self.tabs.draw(window)?;
+        (self.debugger.io(), &self.tabs).draw(window)?;
         Ok(())
     }
 }
 
-pub fn stack_room(window: &Window) -> u16 {
-    let Dimensions { cols: _, rows } = ProgramView::dimensions(window);
+pub fn stack_slots(window: &Window) -> u16 {
+    let rows = layout::stack_rows(window);
     if rows % 2 == 0 {
         // -3 is for the Stack header and dead row
         // / 2 is because each element requires a divider
@@ -61,10 +75,10 @@ pub fn stack_room(window: &Window) -> u16 {
 
 impl Tui {
     fn draw_border_main(&self, window: &mut Window) -> io::Result<()> {
-        let Dimensions { cols: _, rows } = ProgramView::dimensions(window);
+        let rows = layout::program_rows(window);
         if self.show_sidebar(window) {
-            let even_parity = ProgramView::height_parity_even(window);
-            let collapse = self.debugger.stack_height() > stack_room(window);
+            let even_parity = layout::stack_rows_parity_even(window);
+            let collapse = self.debugger.stack_height() > stack_slots(window);
             for i in 0..rows {
                 let sidebar = text::sidebar(i, rows, even_parity, collapse);
                 window.line(tw("║", 1), text::SPACES, sidebar)?;
@@ -94,13 +108,13 @@ pub struct Sidebar<'d> {
 
 impl DrawBorder for Sidebar<'_> {
     fn draw_border(&self, window: &mut Window) -> io::Result<()> {
-        let Dimensions { cols, rows } = ProgramView::dimensions(window);
-        let even_parity = ProgramView::height_parity_even(window);
-        let collapse = self.debugger.stack_height() > stack_room(window);
+        let rows = layout::stack_rows(window);
+        let even_parity = layout::stack_rows_parity_even(window);
+        let collapse = self.debugger.stack_height() > stack_slots(window);
         window.set_style(styles::BORDER)?;
         for i in 0..rows {
             let sidebar = text::sidebar(i, rows, even_parity, collapse);
-            window.move_to(cols + 1, i + 1)?;
+            window.move_to(SidebarX(0), SidebarY(i))?;
             window.clear_until_newline()?;
             window.print(sidebar)?;
         }
@@ -112,24 +126,24 @@ impl Draw for Sidebar<'_> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         StackHeading.draw(window)?;
 
-        let Dimensions { cols, rows } = ProgramView::dimensions(window);
-        let even_parity = ProgramView::height_parity_even(window);
-        let room = stack_room(window);
+        let even_parity = layout::stack_rows_parity_even(window);
+        let room = stack_slots(window);
         let stack_height = self.debugger.stack_height();
         window.set_style(styles::CYAN_HEADING)?;
 
-        let number_x = cols + 2;
-        let symbol_x = cols + 6;
+        let number_x = SidebarX(1);
+        let symbol_x = SidebarX(5);
+        let last_y = SidebarY::max(window);
 
         if stack_height > room {
             let skipped = stack_height - room;
-            let skip_x = cols + 3;
+            let skip_x = SidebarX(2);
 
             // Draw bottom value
             let bottom = &self.debugger.interpreter.stack()[0];
-            window.move_to(number_x, rows)?;
+            window.move_to(number_x, last_y)?;
             window.print(t(&format!("{}", bottom.0)))?;
-            window.move_to(symbol_x, rows)?;
+            window.move_to(symbol_x, last_y)?;
             if let Some(label) = value_label(bottom.0) {
                 window.print(t(label))?;
             } else {
@@ -141,11 +155,11 @@ impl Draw for Sidebar<'_> {
             }
 
             // Draw skip count
-            window.move_to(skip_x, rows - 2)?;
+            window.move_to(skip_x, last_y - 2)?;
             window.print(t(&format!("{}", skipped)))?;
 
             // Draw top values
-            let mut y = if even_parity { rows - 5 } else { rows - 4 };
+            let mut y = if even_parity { last_y - 5 } else { last_y - 4 };
             let top_start = (skipped + 1) as usize;
             let stack_top = &self.debugger.interpreter.stack()[top_start..];
             for cell in stack_top.iter() {
@@ -161,10 +175,10 @@ impl Draw for Sidebar<'_> {
                         window.print_char('"')?;
                     }
                 }
-                y -= 2;
+                y = y - 2;
             }
         } else {
-            let mut y = if even_parity { rows - 1 } else { rows };
+            let mut y = if even_parity { last_y - 1 } else { last_y };
             // Draw values
             for cell in self.debugger.interpreter.stack().iter() {
                 window.move_to(number_x, y)?;
@@ -179,7 +193,7 @@ impl Draw for Sidebar<'_> {
                         window.print_char('"')?;
                     }
                 }
-                y -= 2;
+                y = y - 2;
             }
         }
         Ok(())
@@ -224,36 +238,13 @@ fn value_label(value: u8) -> Option<&'static str> {
         b'\x1F' => "US",
         // ASCII Printable Characters
         b'\x20' => "SP",
+        b'\x22' => " \" ",
         b'\x27' => " \' ",
         b'\x7F' => "DEL",
 
         _ => return None,
     };
     Some(code)
-}
-
-pub struct ProgramView;
-
-pub struct Dimensions {
-    pub cols: u16,
-    pub rows: u16,
-}
-
-impl ProgramView {
-    pub fn dimensions(window: &Window) -> Dimensions {
-        Self::dimensions_for_size(window.width(), window.height())
-    }
-
-    pub fn dimensions_for_size(width: u16, height: u16) -> Dimensions {
-        let cols = width - NON_PROGRAM_WIDTH;
-        let rows = height - NON_PROGRAM_HEIGHT;
-        Dimensions { cols, rows }
-    }
-
-    pub fn height_parity_even(window: &Window) -> bool {
-        let height = window.height() - NON_PROGRAM_HEIGHT;
-        height % 2 == 0
-    }
 }
 
 pub const WIDE_WIDTH: u16 = 80;
@@ -295,7 +286,7 @@ impl DrawBorder for Tabs {
         let text::TabSidebar { top, mid, bot } = {
             let tab = self.focused == FocusedTab::Timeline;
             let collapse_stack = false; // TODO
-            let even = ProgramView::height_parity_even(window) && !collapse_stack;
+            let even = layout::stack_rows_parity_even(window) && !collapse_stack;
             text::tabs_sidebar(tight, tab, even)
         };
 
@@ -311,24 +302,28 @@ impl DrawBorder for Tabs {
     }
 }
 
-impl Draw for Tabs {
+impl<'a> Draw for (&'a VirtualTerminal, &'a Tabs) {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
+        let (term, tabs) = self;
         TabHeadings {
-            tab: self.focused,
-            tabbed_both_ways: self.has_tabbed_both_ways(),
+            tab: tabs.focused,
+            tabbed_both_ways: tabs.has_tabbed_both_ways(),
         }
         .draw(window)?;
 
         CatLogo.draw(window)?;
 
-        CursorDisplay { pos: self.position }.draw(window)?;
+        CursorDisplay { pos: tabs.position }.draw(window)?;
 
         // We draw the tab contents last so the cursor is left
         // on the focused input prompt
-        match self.focused {
-            FocusedTab::Console => self.console.draw(window),
-            FocusedTab::Commands => self.commands.draw(window),
-            FocusedTab::Timeline => self.timeline.draw(window),
+        match tabs.focused {
+            FocusedTab::Console => {
+                tabs.console.draw(window)?;
+                term.draw(window)
+            }
+            FocusedTab::Commands => tabs.commands.draw(window),
+            FocusedTab::Timeline => tabs.timeline.draw(window),
         }
     }
 }
@@ -348,12 +343,12 @@ impl DrawBorder for ConsoleView {
 
 impl Draw for ConsoleView {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
-        let Dimensions { cols, rows } = ProgramView::dimensions(window);
-        let x = cols;
-        let y = rows + 4;
+        let cols = layout::program_cols(window);
+        let x = WindowX(cols);
+        let y = TabY(0).convert(window);
         let total = 7;
         let bar = 1;
-        let offset = total - self.scroll_height;
+        let offset = 0;
         VerticalScrollbar {
             x,
             y,
@@ -362,6 +357,73 @@ impl Draw for ConsoleView {
             offset,
         }
         .draw(window)
+    }
+}
+
+impl Draw for VirtualTerminal {
+    fn draw(&self, window: &mut Window) -> io::Result<()> {
+        window.set_style(styles::PROGRAM_TEXT)?;
+        let cols = layout::program_cols(window) as usize;
+        let num_lines = self.num_lines();
+        let start = if num_lines > 7 { num_lines - 7 } else { 0 };
+        VirtualTerminalDisplay {
+            cols,
+            num_lines,
+            start,
+            term: self,
+        }
+        .draw(window)
+    }
+}
+
+struct VirtualTerminalDisplay<'t> {
+    cols: usize,
+    start: usize,
+    num_lines: usize,
+    term: &'t VirtualTerminal,
+}
+
+impl Draw for VirtualTerminalDisplay<'_> {
+    fn draw(&self, window: &mut Window) -> io::Result<()> {
+        let n = self.num_lines - self.start;
+        for i in 0..n {
+            self.draw_line(i, window)?;
+        }
+        Ok(())
+    }
+}
+
+impl VirtualTerminalDisplay<'_> {
+    fn draw_line(&self, i: usize, window: &mut Window) -> io::Result<()> {
+        // Find the line to print or return if there is none
+        let line_index = self.start + i;
+        let Some(line) = self.term.get_line(line_index) else {
+            return Ok(());
+        };
+        // Slice it to the correct length
+        let line_len = std::cmp::min(line.len(), self.cols);
+        let line = &line[0..line_len];
+        // Move to the right position and write the line
+        let y = TabY(i as u16);
+        window.move_to(WindowX(1), y)?;
+        window.write(line)?;
+
+        // Draw uncommitted if necessary
+        if line_index == self.num_lines - 1 {
+            self.draw_uncommitted(y, line_len, window)?;
+        }
+        Ok(())
+    }
+
+    fn draw_uncommitted(&self, y: TabY, line_len: usize, window: &mut Window) -> io::Result<()> {
+        // Retrieve and truncate uncommitted buffer if necessary
+        let buf = self.term.uncommitted();
+        let buf_len = std::cmp::min(buf.len(), self.cols - line_len);
+        let buf = &buf[0..buf_len];
+        // Move to just after the line and write
+        let after_line = WindowX(1 + (line_len as u16));
+        window.move_to(after_line, y)?;
+        window.write(buf)
     }
 }
 
@@ -382,10 +444,10 @@ impl Draw for CommandsView {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         // Draw command output
         window.set_style(styles::PROGRAM_TEXT)?;
-        let max_width = (window.width() - NON_PROGRAM_WIDTH) as usize;
+        let max_width = program_cols(window) as usize;
         for (i, line) in (0..5).zip(self.output.lines()) {
-            let x = 1;
-            let y = window.height() - 8 + i;
+            let x = WindowX(1);
+            let y = TabY(i);
             window.move_to(x, y)?;
             let line = if line.len() > max_width {
                 &line[0..max_width]
@@ -396,13 +458,14 @@ impl Draw for CommandsView {
         }
 
         // Draw command input
-        window.move_to(2, window.height() - 2)?;
+        let prompt_y = TabY(6);
+        window.move_to(WindowX(2), prompt_y)?;
         window.set_style(styles::CYAN_HEADING)?;
         window.print(t("$ "))?;
         window.set_style(styles::PROGRAM_TEXT)?;
         let buf = self.input_contents.to_string();
         window.print(t(&buf))?;
-        window.move_to(4 + self.input_cursor, window.height() - 2)?;
+        window.move_to(WindowX(4 + self.input_cursor), prompt_y)?;
         Ok(())
     }
 }
@@ -422,9 +485,9 @@ impl DrawBorder for TimelineView {
 
 impl Draw for TimelineView {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
-        let x = 1;
-        let y = window.height() - 3;
-        let total = window.width() - NON_PROGRAM_WIDTH;
+        let x = WindowX(1);
+        let y = TabY(5).convert(window);
+        let total = program_cols(window);
         let bar = 0;
         let offset = 0;
         HorizontalScrollbar {
@@ -442,7 +505,7 @@ struct StackHeading;
 
 impl Draw for StackHeading {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
-        window.move_to(window.width() - 7, 1)?;
+        window.move_to(SidebarX(2), SidebarY(0))?;
         window.set_style(styles::CYAN_HEADING)?;
         window.print(t("Stack"))?;
         Ok(())
@@ -456,13 +519,7 @@ struct TabHeadings {
 
 impl Draw for TabHeadings {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
-        let Dimensions {
-            cols: _,
-            rows: program_rows,
-        } = ProgramView::dimensions(window);
-        let x = 2;
-        let y = program_rows + 2;
-        window.move_to(x, y)?;
+        window.move_to(WindowX(2), TabHeadingY(1))?;
         window.set_style(styles::CYAN_HEADING)?;
         window.print(text::BEFUNGE_DEBUGGER)?;
 
@@ -489,8 +546,8 @@ impl Draw for TabHeadings {
 }
 
 struct HorizontalScrollbar {
-    x: u16,
-    y: u16,
+    x: WindowX,
+    y: WindowY,
     total: u16,
     bar: u16,
     offset: u16,
@@ -512,9 +569,9 @@ impl HorizontalScrollbar {
 
 struct VerticalScrollbar {
     /// x position in overall window space
-    x: u16,
+    x: WindowX,
     /// y position in overall window space
-    y: u16,
+    y: WindowY,
     total: u16,
     bar: u16,
     offset: u16,
@@ -543,10 +600,11 @@ struct ProgramDisplay<'d> {
 
 impl Draw for ProgramDisplay<'_> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
-        let Dimensions { cols, rows } = ProgramView::dimensions(window);
+        let cols = layout::program_cols(window);
+        let rows = layout::program_rows(window);
         let space = self.debugger.interpreter.space();
         for y in 0..rows {
-            window.move_to(1, y + 1)?;
+            window.move_to(ProgramX(0), ProgramY(y))?;
             let mut skipped = 0;
             for x in 0..cols {
                 let pos = Position {
@@ -609,12 +667,13 @@ pub struct ProgramCellReset<'d> {
 impl Draw for ProgramCellReset<'_> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         // Skip drawing if out of bounds
-        let Dimensions { cols, rows } = ProgramView::dimensions(window);
+        let cols = layout::program_cols(window);
+        let rows = layout::program_rows(window);
         if self.pos.x as u16 >= cols || self.pos.y as u16 >= rows {
             return Ok(());
         }
         // Move to position
-        window.move_to((self.pos.x + 1) as u16, (self.pos.y + 1) as u16)?;
+        window.move_to(ProgramX(self.pos.x as u16), ProgramY(self.pos.y as u16))?;
         // Get cell info
         let cell = self.debugger.interpreter.space().get_cell(self.pos);
         let state = self.debugger.analysis.cell_states.get_cell(self.pos);
@@ -641,12 +700,13 @@ pub struct ProgramCellCursor<'d> {
 impl Draw for ProgramCellCursor<'_> {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         // Skip drawing if out of bounds
-        let Dimensions { cols, rows } = ProgramView::dimensions(window);
+        let cols = layout::program_cols(window);
+        let rows = layout::program_rows(window);
         if self.pos.x as u16 >= cols || self.pos.y as u16 >= rows {
             return Ok(());
         }
         // Move to position
-        window.move_to((self.pos.x + 1) as u16, (self.pos.y + 1) as u16)?;
+        window.move_to(ProgramX(self.pos.x as u16), ProgramY(self.pos.y as u16))?;
         // Get cell info
         let cell = self.debugger.interpreter.space().get_cell(self.pos);
         let state = self.debugger.analysis.cell_states.get_cell(self.pos);
@@ -676,17 +736,17 @@ pub struct CursorDisplay {
 impl Draw for CursorDisplay {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
         // X row
-        window.move_to(window.width() - 8, window.height() - 8)?;
+        window.move_to(SidebarX(1), TabY(0))?;
         window.set_style(styles::CYAN_HEADING)?;
         window.print(t("X:    "))?;
-        window.move_to(window.width() - 5, window.height() - 8)?;
+        window.move_to(SidebarX(4), TabY(0))?;
         window.set_style(styles::PROGRAM_TEXT)?;
         window.print(t(&format!("{}", self.pos.x)))?;
         // Y row
-        window.move_to(window.width() - 8, window.height() - 6)?;
+        window.move_to(SidebarX(1), TabY(2))?;
         window.set_style(styles::CYAN_HEADING)?;
         window.print(t("Y: "))?;
-        window.move_to(window.width() - 5, window.height() - 6)?;
+        window.move_to(SidebarX(4), TabY(2))?;
         window.set_style(styles::PROGRAM_TEXT)?;
         window.print(t(&format!("{}", self.pos.y)))?;
 
@@ -698,15 +758,15 @@ struct CatLogo;
 
 impl Draw for CatLogo {
     fn draw(&self, window: &mut Window) -> io::Result<()> {
-        window.move_to(window.width() - 7, window.height() - 4)?;
+        window.move_to(SidebarX(2), TabY(4))?;
         window.set_style(styles::LOGO_OUTLINE)?;
         window.print(t("/\\_/\\"))?;
-        window.move_to(window.width() - 8, window.height() - 3)?;
+        window.move_to(SidebarX(1), TabY(5))?;
         window.print(t("(  .  )"))?;
-        window.move_to(window.width() - 6, window.height() - 3)?;
+        window.move_to(SidebarX(3), TabY(5))?;
         window.set_style(styles::LOGO_EYES)?;
         window.print(t("o o"))?;
-        window.move_to(window.width() - 8, window.height() - 2)?;
+        window.move_to(SidebarX(1), TabY(6))?;
         window.set_style(styles::LOGO_OUTLINE)?;
         window.print(t("befunge"))?;
         Ok(())

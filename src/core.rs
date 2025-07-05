@@ -58,6 +58,16 @@ pub struct Cursor {
     pub mode: Mode,
 }
 
+impl Default for Cursor {
+    fn default() -> Self {
+        Self {
+            pos: Position::ORIGIN,
+            dir: Direction::Right,
+            mode: Mode::Normal,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cell(pub u8);
 

@@ -1,5 +1,5 @@
 [package]
-name = "befunge-exec"
+name = "bft"
 version = "0.1.0"
 authors = ["Robin Brown"]
 edition = "2024"

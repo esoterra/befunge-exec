@@ -81,25 +81,16 @@ where
 
     /// Retrieves the cell located at a position in the program
     pub fn get_cell(&self, pos: Position) -> Cell {
-        let x = pos.x as usize;
-        let y = pos.y as usize;
-        if x > self.grid.cols() || y > self.grid.rows() {
-            self.map.get(&pos).copied().unwrap_or_default()
-        } else {
-            self.grid.get(y, x).copied().unwrap_or_default()
-        }
+        self.lookup_cell(pos).copied().unwrap_or_default()
     }
 }
 
-impl<Cell> Space<Cell>
-// where Cell: fmt::Debug
-{
+impl<Cell> Space<Cell> {
     /// Gets a reference to the specified cell if it exists
-    #[allow(unused)]
     pub fn lookup_cell(&self, pos: Position) -> Option<&Cell> {
         let x = pos.x as usize;
         let y = pos.y as usize;
-        if x > self.grid.cols() || y > self.grid.rows() {
+        if x >= self.grid.cols() || y >= self.grid.rows() {
             self.map.get(&pos)
         } else {
             self.grid.get(y, x)
@@ -157,5 +148,44 @@ mod tests {
         let mut space: Space<u8> = Space::with_size(100, 100);
         space.set_cell(Position::ORIGIN, 2);
         assert_eq!(space.get_cell(Position::ORIGIN), 2);
+    }
+
+    #[test]
+    fn test_insert_unit_square() {
+        let mut space: Space<u8> = Space::with_size(100, 100);
+        // insert 0 at 0,0
+        let pos = Position::ORIGIN;
+        space.set_cell(pos, 0);
+        assert_eq!(space.get_cell(pos), 0);
+        // insert 1 at 1,0
+        let pos = Position { x: 1, y: 0 };
+        space.set_cell(pos, 1);
+        assert_eq!(space.get_cell(pos), 1);
+        // insert 2 at 1,1
+        let pos = Position { x: 1, y: 1 };
+        space.set_cell(pos, 2);
+        assert_eq!(space.get_cell(pos), 2);
+        // insert 3 at 0,1
+        let pos = Position { x: 0, y: 1 };
+        space.set_cell(pos, 3);
+        assert_eq!(space.get_cell(pos), 3);
+    }
+
+    #[test]
+    fn test_insert_one_one() {
+        let mut space: Space<u8> = Space::with_size(2, 2);
+        // insert 2 at 1,1
+        let pos = Position { x: 2, y: 1 };
+        space.set_cell(pos, 2);
+        assert_eq!(space.get_cell(pos), 2);
+    }
+
+    #[test]
+    fn test_insert_outside() {
+        let mut space: Space<u8> = Space::with_size(10, 10);
+        // insert 2 at 1,1
+        let pos = Position { x: 20, y: 20 };
+        space.set_cell(pos, 2);
+        assert_eq!(space.get_cell(pos), 2);
     }
 }

@@ -153,25 +153,6 @@ pub struct VecIO {
     output_buffer: Vec<u8>,
 }
 
-impl VecIO {
-    /// Appends data to the input buffer
-    pub fn write_input(&mut self, input: &[u8]) {
-        for byte in input {
-            self.input_buffer.push_back(*byte);
-        }
-    }
-
-    pub fn println_output(&mut self) {
-        let mut out = stdout();
-        if !self.output_buffer.is_empty() {
-            out.write_all(&self.output_buffer).unwrap();
-            writeln!(out).unwrap();
-            out.flush().unwrap();
-            self.output_buffer.clear();
-        }
-    }
-}
-
 impl IO for VecIO {
     fn read_byte(&mut self) -> Option<u8> {
         self.input_buffer.pop_front()
@@ -194,7 +175,7 @@ impl IO for VecIO {
 // Either reads a number from the iterator successfully
 // returning the number of bytes read and the value of the number
 // or returns that a number could not be read and how many bytes can be skipped.
-fn try_read_number(iter: impl Iterator<Item = u8>) -> Result<(usize, u8), usize> {
+pub fn try_read_number(iter: impl Iterator<Item = u8>) -> Result<(usize, u8), usize> {
     let mut iter = iter.enumerate();
     let (mut offset, mut num) = base_number(&mut iter)?;
     let skippable = offset - 1;

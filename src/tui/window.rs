@@ -2,20 +2,79 @@ use super::text::{self, Text};
 
 use std::io::{self, Stdout, Write, stdout};
 
-use crossterm::cursor::{MoveRight, MoveTo, MoveToNextLine};
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
-use crossterm::style::{ContentStyle, SetStyle};
-use crossterm::terminal::{
-    BeginSynchronizedUpdate, Clear, ClearType, DisableLineWrap, EnableLineWrap,
-    EndSynchronizedUpdate, EnterAlternateScreen, LeaveAlternateScreen, SetTitle, disable_raw_mode,
-    enable_raw_mode, size,
+use crossterm::{
+    QueueableCommand,
+    cursor::{MoveRight, MoveTo, MoveToNextLine},
+    event::{DisableMouseCapture, EnableMouseCapture},
+    execute,
+    style::{ContentStyle, SetStyle},
+    terminal::{
+        BeginSynchronizedUpdate, Clear, ClearType, DisableLineWrap, EnableLineWrap,
+        EndSynchronizedUpdate, EnterAlternateScreen, LeaveAlternateScreen, SetTitle,
+        disable_raw_mode, enable_raw_mode, size,
+    },
 };
-use crossterm::{QueueableCommand, execute};
 
 pub struct Window {
     stdout: Stdout,
     width: u16,
     height: u16,
+}
+
+pub fn window_coord(x: u16, y: u16) -> (WindowX, WindowY) {
+    (WindowX(x), WindowY(y))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowX(pub u16);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowY(pub u16);
+
+impl std::ops::Add<u16> for WindowX {
+    type Output = WindowX;
+
+    fn add(self, rhs: u16) -> Self::Output {
+        WindowX(self.0 + rhs)
+    }
+}
+
+impl std::ops::Sub<u16> for WindowX {
+    type Output = WindowX;
+
+    fn sub(self, rhs: u16) -> Self::Output {
+        WindowX(self.0 - rhs)
+    }
+}
+
+impl std::ops::Add<u16> for WindowY {
+    type Output = WindowY;
+
+    fn add(self, rhs: u16) -> Self::Output {
+        WindowY(self.0 + rhs)
+    }
+}
+
+impl std::ops::Sub<u16> for WindowY {
+    type Output = WindowY;
+
+    fn sub(self, rhs: u16) -> Self::Output {
+        WindowY(self.0 - rhs)
+    }
+}
+
+pub trait ConvertToWindowSpace<T> {
+    fn convert(self, window: &Window) -> T;
+}
+
+impl ConvertToWindowSpace<WindowX> for WindowX {
+    fn convert(self, _window: &Window) -> WindowX {
+        self
+    }
+}
+impl ConvertToWindowSpace<WindowY> for WindowY {
+    fn convert(self, _window: &Window) -> WindowY {
+        self
+    }
 }
 
 impl Window {
@@ -87,8 +146,14 @@ impl Window {
 
     // Terminal Operation Wrappers
 
-    pub fn move_to(&mut self, x: u16, y: u16) -> io::Result<()> {
-        self.stdout.queue(MoveTo(x, y))?;
+    pub fn move_to(
+        &mut self,
+        x: impl ConvertToWindowSpace<WindowX>,
+        y: impl ConvertToWindowSpace<WindowY>,
+    ) -> io::Result<()> {
+        let x = x.convert(self);
+        let y = y.convert(self);
+        self.stdout.queue(MoveTo(x.0, y.0))?;
         Ok(())
     }
 
@@ -106,6 +171,10 @@ impl Window {
 
     pub fn print<A: AsRef<str>>(&mut self, t: Text<A>) -> io::Result<()> {
         write!(self.stdout, "{}", t.as_ref())
+    }
+
+    pub fn write(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.stdout.write_all(buf)
     }
 
     pub fn print_char(&mut self, c: char) -> io::Result<()> {

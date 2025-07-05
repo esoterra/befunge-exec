@@ -7,9 +7,11 @@ use thiserror::Error;
 
 use crate::{
     core::Position,
+    terminal::VirtualTerminal,
     tui::{
         ListenForKey, ListenForMouse, Window,
-        draw::{Dimensions, ProgramView},
+        layout::{self, TabY},
+        window::{WindowX, WindowY},
     },
 };
 
@@ -37,9 +39,7 @@ pub enum FocusedTab {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
-pub struct ConsoleView {
-    pub scroll_height: u16,
-}
+pub struct ConsoleView {}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CommandsView {
@@ -83,12 +83,32 @@ impl Tabs {
         self.has_back_tabbed && self.has_tabbed
     }
 
-    pub fn move_to_cursor(&self, window: &mut Window) -> io::Result<()> {
-        let Dimensions { cols, rows } = ProgramView::dimensions(window);
+    pub fn move_to_cursor(&self, term: &VirtualTerminal, window: &mut Window) -> io::Result<()> {
         let (x, y) = match self.focused {
-            FocusedTab::Console => (1, rows + 4),
-            FocusedTab::Commands => (self.commands.input_cursor + 4, window.height() - 2),
-            FocusedTab::Timeline => (1, window.height() - 2),
+            FocusedTab::Console => {
+                let num_lines = term.num_lines();
+                let last_line = num_lines - 1;
+                let y = if num_lines < 8 {
+                    TabY(num_lines as u16 - 1)
+                } else {
+                    TabY(6)
+                };
+                match term.get_line(last_line) {
+                    Some(line) => {
+                        let cols = layout::program_cols(window);
+                        let max_w = cols - 2;
+                        let cursor = (line.len() + term.cursor()) as u16;
+                        if cursor > max_w {
+                            (WindowX(max_w), y)
+                        } else {
+                            (WindowX(1 + cursor), y)
+                        }
+                    }
+                    None => (WindowX(1), TabY(0)),
+                }
+            }
+            FocusedTab::Commands => (WindowX(4 + self.commands.input_cursor), TabY(6)),
+            FocusedTab::Timeline => (WindowX(1), TabY(5)),
         };
         window.move_to(x, y)?;
         Ok(())
@@ -114,7 +134,10 @@ impl ListenForKey for Tabs {
                 None
             }
             _ => match self.focused {
-                FocusedTab::Console => None,
+                FocusedTab::Console => {
+                    self.dirty = true;
+                    Some(CommandEvent::PassToTerminal)
+                }
                 FocusedTab::Commands => {
                     self.dirty = true;
                     self.commands.on_key_event(event)
@@ -130,7 +153,8 @@ impl ListenForMouse for Tabs {
 
     fn on_mouse_event(&mut self, event: MouseEvent, window: &Window) -> Self::Output {
         if matches!(event.kind, MouseEventKind::Down(_)) {
-            let Dimensions { rows, cols } = ProgramView::dimensions(window);
+            let cols = layout::program_cols(window);
+            let rows = layout::program_rows(window);
             let tab_min_row = rows + 2;
             let tab_max_row = tab_min_row + 2;
             if event.row >= tab_min_row && event.row <= tab_max_row {
@@ -205,6 +229,7 @@ pub enum CommandEvent {
     Pause,
     Breakpoint { pos: Position },
     Quit,
+    PassToTerminal,
 }
 
 impl ListenForKey for CommandsView {
@@ -386,7 +411,7 @@ enum CommandError<'a> {
     UnknownCommand { arg: &'a str },
 }
 
-const HELP_OUTPUT: &str = "step  │ s [n]     │ takes a step\nrun   │ r [speed] │ runs the program\npause │ p         │ pauses the execution\nbreak │ b <x> <y> │ places a breakpoint\nquit  │ q         │ exits the debugger";
+const HELP_OUTPUT: &str = "step  │ s [n]     │ takes a step\nrun   │ r         │ runs the program\npause │ p         │ pauses the execution\nbreak │ b <x> <y> │ places a breakpoint\nquit  │ q         │ exits the debugger";
 
 fn try_collect<'a>(mut args: impl Iterator<Item = &'a str>) -> Option<Vec<&'a str>> {
     if let Some(arg) = args.next() {
