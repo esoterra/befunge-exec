@@ -22,6 +22,7 @@ Befunge Tools currently targets Befunge 93 except that programs may be larger th
 Befunge Tools is a collection of command line tools for executing, analyzing, and visualizing Befunge code.
 
 - [X] the `run` command which is a no-frills Befunge interpreter.
+  - [ ] (Planned) support use in shebang interpreter directive
 - [X] the `debug` command which launches an interactive TUI environment.
   - [X] command tab with debugger run/step/pause functionality
   - [X] console tab with interactive virtual terminal
@@ -29,7 +30,6 @@ Befunge Tools is a collection of command line tools for executing, analyzing, an
   - [X] program visualization with path-aware highlighting
   - [X] stack visualization sidebar
   - [X] breakpoint support
-  - [ ] (Planned) Built-in `asciinema` recording
 
 ## Run
 
