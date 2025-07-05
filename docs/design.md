@@ -59,3 +59,9 @@ You can find files with various design pieces in the `./docs/designs` folder.
 - [Resizing](./designs/resizing.md)
 - [Original Concept](./designs/original_concept.txt)
 - [Index of Glyphs](./designs/index_of_glyphs.md) (outdated)
+
+## Acknowledgements
+
+* The initial design was all done in text editors
+* The logo is pulled from the [ASCII Art Archive](https://www.asciiart.eu/animals/cats)
+* Revisions to the design have been designed using the [ASCII Draw Studio](https://www.asciiart.eu/ascii-draw-studio/app)
