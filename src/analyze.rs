@@ -2,11 +2,11 @@ use core::fmt;
 use std::collections::VecDeque;
 
 use crate::{
-    core::{Cell, Direction, Mode, Position},
+    core::{Direction, GridCell, Mode, Position},
     space::Space,
 };
 
-pub fn analyze_path(space: &Space<Cell>) -> PathAnalysis {
+pub fn analyze_path(space: &Space<GridCell>) -> PathAnalysis {
     PathAnalysisState::new(space).analyze()
 }
 
@@ -129,13 +129,13 @@ impl State {
 }
 
 struct PathAnalysisState<'src> {
-    space: &'src Space<Cell>,
+    space: &'src Space<GridCell>,
     states: Space<State>,
     queue: VecDeque<(Position, Direction, Mode)>,
 }
 
 impl<'src> PathAnalysisState<'src> {
-    fn new(space: &'src Space<Cell>) -> Self {
+    fn new(space: &'src Space<GridCell>) -> Self {
         let states: Space<State> = Space::with_size(space.rows(), space.cols());
         let mut queue: VecDeque<(Position, Direction, Mode)> = Default::default();
         queue.push_back((Position::ORIGIN, Direction::Right, Mode::Normal));

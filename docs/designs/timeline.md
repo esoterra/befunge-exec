@@ -1,4 +1,4 @@
-# Timeline Design
+# Timeline Design Scratch Space
 
 ## Human-readable log format
 
@@ -22,4 +22,11 @@ v (4,0) v
 ║  zero  ║ right ║  one   ║    Add    ║
 ║ (0,0)  ║ (1,0) ║ (2,0)  ║   (3,0)   ║
 ║ []→[0] ║       ║ []→[1] ║ [0,1]→[1] ║
+```
+
+## Controls
+
+```
+ ║<<║<║.║>║>>║
+═╩══╩═╩═╩═╩══╩═
 ```

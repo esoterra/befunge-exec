@@ -69,16 +69,31 @@ impl Default for Cursor {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Cell(pub u8);
+pub struct GridCell(pub u8);
 
-impl Default for Cell {
+impl Default for GridCell {
     fn default() -> Self {
         Self(b' ')
     }
 }
 
-impl From<u8> for Cell {
+impl From<u8> for GridCell {
     fn from(value: u8) -> Self {
-        Cell(value)
+        GridCell(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StackCell(pub i32);
+
+impl From<GridCell> for StackCell {
+    fn from(value: GridCell) -> Self {
+        StackCell(value.0 as i32)
+    }
+}
+
+impl From<StackCell> for GridCell {
+    fn from(value: StackCell) -> Self {
+        GridCell(value.0 as u8)
     }
 }

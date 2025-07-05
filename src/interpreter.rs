@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use crate::{
-    core::{Cell, Cursor, Direction, Mode, Position},
+    core::{Cursor, Direction, GridCell, Mode, Position, StackCell},
     io::{IO, StdIO},
     record::Record,
     space::Space,
@@ -11,10 +11,10 @@ use crate::{
 /// An Interpreter represents a step by step executor for befunge code.
 /// It contains a program, all necessary state, and IO buffers.
 pub struct Interpreter<IOImpl, R> {
-    space: Space<Cell>,
+    space: Space<GridCell>,
 
     cursor: Cursor,
-    stack: Vec<Cell>,
+    stack: Vec<StackCell>,
 
     io: IOImpl,
     recorder: R,
@@ -44,7 +44,7 @@ pub enum InterpreterError {
 }
 
 impl Interpreter<StdIO, ()> {
-    pub fn new_std(space: Space<Cell>) -> Self {
+    pub fn new_std(space: Space<GridCell>) -> Self {
         let cursor = Cursor::default();
         Interpreter {
             space,
@@ -60,7 +60,7 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
     /// Creates a new Interpreter that executes
     /// the provided program with the provided io
     /// and records events to the provided recorder.
-    pub fn new(space: Space<Cell>, io: IOImpl, recorder: R) -> Self {
+    pub fn new(space: Space<GridCell>, io: IOImpl, recorder: R) -> Self {
         let cursor = Cursor::default();
         Interpreter {
             space,
@@ -79,7 +79,7 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
         &mut self.io
     }
 
-    pub fn space(&self) -> &Space<Cell> {
+    pub fn space(&self) -> &Space<GridCell> {
         &self.space
     }
 
@@ -95,13 +95,13 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
     }
 
     /// Get the current stack contents
-    pub fn stack(&self) -> &[Cell] {
+    pub fn stack(&self) -> &[StackCell] {
         &self.stack[..]
     }
 
-    fn put(&mut self, pos: Position, cell: Cell) {
+    fn put(&mut self, pos: Position, cell: GridCell) {
         let old = self.space.get_cell(pos);
-        self.recorder.replace(pos, old.0, cell.0);
+        self.recorder.replace(pos, old, cell);
         self.space.set_cell(pos, cell);
     }
 
@@ -110,28 +110,28 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
         self.cursor.pos = self.space.move_pos(pos, dir);
     }
 
-    fn pop(&mut self) -> u8 {
+    fn pop(&mut self) -> StackCell {
         match self.stack.pop() {
             Some(top) => {
-                self.recorder.pop(top.0);
-                top.0
+                self.recorder.pop(top);
+                top
             }
             None => {
                 self.recorder.pop_bottom();
-                0
+                StackCell(0)
             }
         }
     }
 
-    fn push(&mut self, cell: u8) {
+    fn push(&mut self, cell: StackCell) {
         self.recorder.push(cell);
-        self.stack.push(Cell(cell));
+        self.stack.push(cell);
     }
 
     /// Interprets the next command
     pub fn step(&mut self) -> Status {
         let cell = self.space.get_cell(self.cursor.pos);
-        self.recorder.start_step(self.cursor.pos, cell.0);
+        self.recorder.start_step(self.cursor.pos, cell);
 
         let status = match self.cursor.mode {
             Mode::Quote => self.step_quoted(cell),
@@ -153,66 +153,66 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
         status
     }
 
-    fn step_quoted(&mut self, cell: Cell) -> Status {
+    fn step_quoted(&mut self, cell: GridCell) -> Status {
         match cell {
-            Cell(b'"') => {
+            GridCell(b'"') => {
                 self.cursor.mode = Mode::Normal;
                 self.recorder.exit_quote();
             }
-            _ => self.stack.push(cell),
+            _ => self.stack.push(cell.into()),
         }
         self.move_auto();
         Status::Completed
     }
 
-    fn step_unquoted(&mut self, cell: Cell) -> Status {
+    fn step_unquoted(&mut self, cell: GridCell) -> Status {
         use std::num::Wrapping;
 
         let status = match cell.0 {
             b'+' => {
                 let (e1, e2) = (self.pop(), self.pop());
-                let result = Wrapping(e2) + Wrapping(e1);
-                self.push(result.0);
+                let result = Wrapping(e2.0) + Wrapping(e1.0);
+                self.push(StackCell(result.0));
                 Status::Completed
             }
             b'-' => {
                 let upper = self.pop();
                 let lower = self.pop();
-                let result = Wrapping(lower) - Wrapping(upper);
-                self.push(result.0);
+                let result = Wrapping(lower.0) - Wrapping(upper.0);
+                self.push(StackCell(result.0));
                 Status::Completed
             }
             b'*' => {
                 let (e1, e2) = (self.pop(), self.pop());
-                let result = Wrapping(e2) * Wrapping(e1);
-                self.push(result.0);
+                let result = Wrapping(e2.0) * Wrapping(e1.0);
+                self.push(StackCell(result.0));
                 Status::Completed
             }
             b'/' => {
                 let upper = self.pop();
                 let lower = self.pop();
-                let result = Wrapping(lower) / Wrapping(upper);
-                self.push(result.0);
+                let result = Wrapping(lower.0) / Wrapping(upper.0);
+                self.push(StackCell(result.0));
                 Status::Completed
             }
             b'%' => {
                 let upper = self.pop();
                 let lower = self.pop();
-                let result = Wrapping(lower) % Wrapping(upper);
-                self.push(result.0);
+                let result = Wrapping(lower.0) % Wrapping(upper.0);
+                self.push(StackCell(result.0));
                 Status::Completed
             }
             b'!' => {
                 let value = self.pop();
-                let result = if value == 0 { 1 } else { 0 };
-                self.push(result);
+                let result = if value.0 == 0 { 1 } else { 0 };
+                self.push(StackCell(result));
                 Status::Completed
             }
             b'`' => {
                 let upper = self.pop();
                 let lower = self.pop();
-                let result = if lower > upper { 1 } else { 0 };
-                self.push(result);
+                let result = if lower.0 > upper.0 { 1 } else { 0 };
+                self.push(StackCell(result));
                 Status::Completed
             }
             b'>' => {
@@ -244,7 +244,7 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
                 Status::Completed
             }
             b'_' => {
-                self.cursor.dir = if self.pop() == 0 {
+                self.cursor.dir = if self.pop().0 == 0 {
                     Direction::Right
                 } else {
                     Direction::Left
@@ -252,7 +252,7 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
                 Status::Completed
             }
             b'|' => {
-                self.cursor.dir = if self.pop() == 0 {
+                self.cursor.dir = if self.pop().0 == 0 {
                     Direction::Down
                 } else {
                     Direction::Up
@@ -282,13 +282,13 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
                 Status::Completed
             }
             b'.' => {
-                let number_string = format!("{} ", self.pop());
+                let number_string = format!("{} ", self.pop().0);
                 let buf = number_string.as_bytes();
                 self.io.write(buf);
                 Status::Completed
             }
             b',' => {
-                let buf = &[self.pop()];
+                let buf = &[self.pop().0 as u8];
                 self.io.write(buf);
                 Status::Completed
             }
@@ -297,10 +297,10 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
                 Status::Completed
             }
             b'g' => {
-                let upper = self.pop();
-                let lower = self.pop();
+                let upper = self.pop().0 as u8;
+                let lower = self.pop().0 as u8;
                 let value = self.space.get_cell(Position { x: lower, y: upper });
-                self.push(value.0);
+                self.push(value.into());
                 Status::Completed
             }
             b'p' => {
@@ -309,16 +309,16 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
                 let lower = self.pop();
                 self.put(
                     Position {
-                        x: middle,
-                        y: upper,
+                        x: middle.0 as u8,
+                        y: upper.0 as u8,
                     },
-                    Cell(lower),
+                    lower.into(),
                 );
                 Status::Completed
             }
             b'&' => {
                 if let Some(input_number) = self.io.read_number() {
-                    self.push(input_number);
+                    self.push(StackCell(input_number as i32));
                     Status::Completed
                 } else {
                     Status::Waiting
@@ -326,7 +326,7 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
             }
             b'~' => {
                 if let Some(input) = self.io.read_byte() {
-                    self.push(input);
+                    self.push(StackCell(input as i32));
                     Status::Completed
                 } else {
                     Status::Waiting
@@ -334,43 +334,43 @@ impl<IOImpl: IO, R: Record> Interpreter<IOImpl, R> {
             }
             b'@' => Status::Terminated,
             b'0' => {
-                self.push(0);
+                self.push(StackCell(0));
                 Status::Completed
             }
             b'1' => {
-                self.push(1);
+                self.push(StackCell(1));
                 Status::Completed
             }
             b'2' => {
-                self.push(2);
+                self.push(StackCell(2));
                 Status::Completed
             }
             b'3' => {
-                self.push(3);
+                self.push(StackCell(3));
                 Status::Completed
             }
             b'4' => {
-                self.push(4);
+                self.push(StackCell(4));
                 Status::Completed
             }
             b'5' => {
-                self.push(5);
+                self.push(StackCell(5));
                 Status::Completed
             }
             b'6' => {
-                self.push(6);
+                self.push(StackCell(6));
                 Status::Completed
             }
             b'7' => {
-                self.push(7);
+                self.push(StackCell(7));
                 Status::Completed
             }
             b'8' => {
-                self.push(8);
+                self.push(StackCell(8));
                 Status::Completed
             }
             b'9' => {
-                self.push(9);
+                self.push(StackCell(9));
                 Status::Completed
             }
             b' ' => Status::Completed,

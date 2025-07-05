@@ -1,27 +1,27 @@
-use crate::core::Position;
+use crate::core::{GridCell, Position, StackCell};
 
 pub trait Record {
-    fn start_step(&mut self, at: Position, instruction: u8);
+    fn start_step(&mut self, at: Position, instruction: GridCell);
     fn rollback_step(&mut self);
     fn commit_step(&mut self);
 
-    fn replace(&mut self, at: Position, old: u8, new: u8);
-    fn pop(&mut self, old: u8);
+    fn replace(&mut self, at: Position, old: GridCell, new: GridCell);
+    fn pop(&mut self, old: StackCell);
     fn pop_bottom(&mut self);
-    fn push(&mut self, new: u8);
+    fn push(&mut self, new: StackCell);
     fn enter_quote(&mut self);
     fn exit_quote(&mut self);
 }
 
 impl Record for () {
-    fn start_step(&mut self, _at: Position, _instruction: u8) {}
+    fn start_step(&mut self, _at: Position, _instruction: GridCell) {}
     fn rollback_step(&mut self) {}
     fn commit_step(&mut self) {}
 
-    fn replace(&mut self, _at: Position, _old: u8, _new: u8) {}
-    fn pop(&mut self, _old: u8) {}
+    fn replace(&mut self, _at: Position, _old: GridCell, _new: GridCell) {}
+    fn pop(&mut self, _old: StackCell) {}
     fn pop_bottom(&mut self) {}
-    fn push(&mut self, _new: u8) {}
+    fn push(&mut self, _new: StackCell) {}
     fn enter_quote(&mut self) {}
     fn exit_quote(&mut self) {}
 }
@@ -31,7 +31,7 @@ where
     T1: Record,
     T2: Record,
 {
-    fn start_step(&mut self, at: Position, instruction: u8) {
+    fn start_step(&mut self, at: Position, instruction: GridCell) {
         self.0.start_step(at, instruction);
         self.1.start_step(at, instruction);
     }
@@ -46,12 +46,12 @@ where
         self.1.commit_step();
     }
 
-    fn replace(&mut self, at: Position, old: u8, new: u8) {
+    fn replace(&mut self, at: Position, old: GridCell, new: GridCell) {
         self.0.replace(at, old, new);
         self.1.replace(at, old, new);
     }
 
-    fn pop(&mut self, old: u8) {
+    fn pop(&mut self, old: StackCell) {
         self.0.pop(old);
         self.1.pop(old);
     }
@@ -61,7 +61,7 @@ where
         self.1.pop_bottom();
     }
 
-    fn push(&mut self, new: u8) {
+    fn push(&mut self, new: StackCell) {
         self.0.push(new);
         self.1.push(new);
     }
@@ -80,8 +80,8 @@ where
 pub struct StdOutEventLog;
 
 impl Record for StdOutEventLog {
-    fn start_step(&mut self, at: Position, instruction: u8) {
-        println!("Started step at {} with opcode '{}'", at, instruction);
+    fn start_step(&mut self, at: Position, instruction: GridCell) {
+        println!("Started step at {} with opcode '{}'", at, instruction.0);
     }
 
     fn rollback_step(&mut self) {
@@ -92,20 +92,20 @@ impl Record for StdOutEventLog {
         println!("Commit step");
     }
 
-    fn replace(&mut self, at: Position, old: u8, new: u8) {
-        println!("Replace '{}' with '{}' at {}", old, new, at);
+    fn replace(&mut self, at: Position, old: GridCell, new: GridCell) {
+        println!("Replace '{}' with '{}' at {}", old.0, new.0, at);
     }
 
-    fn pop(&mut self, old: u8) {
-        println!("Popped '{}' from stack", old);
+    fn pop(&mut self, old: StackCell) {
+        println!("Popped '{}' from stack", old.0);
     }
 
     fn pop_bottom(&mut self) {
         println!("Popped while at bottom of stack")
     }
 
-    fn push(&mut self, new: u8) {
-        println!("Pushed '{}' onto the stack", new);
+    fn push(&mut self, new: StackCell) {
+        println!("Pushed '{}' onto the stack", new.0);
     }
 
     fn enter_quote(&mut self) {
@@ -120,8 +120,8 @@ impl Record for StdOutEventLog {
 pub struct StdErrEventLog;
 
 impl Record for StdErrEventLog {
-    fn start_step(&mut self, at: Position, instruction: u8) {
-        eprintln!("Started step at {} with opcode '{}'", at, instruction);
+    fn start_step(&mut self, at: Position, instruction: GridCell) {
+        eprintln!("Started step at {} with opcode '{}'", at, instruction.0);
     }
 
     fn rollback_step(&mut self) {
@@ -132,20 +132,20 @@ impl Record for StdErrEventLog {
         eprintln!("Commit step");
     }
 
-    fn replace(&mut self, at: Position, old: u8, new: u8) {
-        eprintln!("Replace '{}' with '{}' at {}", old, new, at);
+    fn replace(&mut self, at: Position, old: GridCell, new: GridCell) {
+        eprintln!("Replace '{}' with '{}' at {}", old.0, new.0, at);
     }
 
-    fn pop(&mut self, old: u8) {
-        eprintln!("Popped '{}' from stack", old);
+    fn pop(&mut self, old: StackCell) {
+        eprintln!("Popped '{}' from stack", old.0);
     }
 
     fn pop_bottom(&mut self) {
         eprintln!("Popped while at bottom of stack")
     }
 
-    fn push(&mut self, new: u8) {
-        eprintln!("Pushed '{}' onto the stack", new);
+    fn push(&mut self, new: StackCell) {
+        eprintln!("Pushed '{}' onto the stack", new.0);
     }
 
     fn enter_quote(&mut self) {
@@ -168,10 +168,18 @@ pub struct Timeline {
 /// Events contain enough information to apply them to the state either forwards or backwards.
 #[allow(dead_code)]
 enum Event {
-    Replace { at: Position, old: u8, new: u8 },
-    Pop { old: u8 },
+    Replace {
+        at: Position,
+        old: GridCell,
+        new: GridCell,
+    },
+    Pop {
+        old: StackCell,
+    },
     PopBottom,
-    Push { new: u8 },
+    Push {
+        new: StackCell,
+    },
     EnterQuote,
     ExitQuote,
 }
@@ -179,12 +187,12 @@ enum Event {
 #[allow(dead_code)]
 struct Step {
     at: Position,
-    instruction: u8,
+    instruction: GridCell,
     events: u8,
 }
 
 impl Record for Timeline {
-    fn start_step(&mut self, at: Position, instruction: u8) {
+    fn start_step(&mut self, at: Position, instruction: GridCell) {
         self.steps.push(Step {
             at,
             instruction,
@@ -202,11 +210,11 @@ impl Record for Timeline {
         self.pending_events = 0;
     }
 
-    fn replace(&mut self, at: Position, old: u8, new: u8) {
+    fn replace(&mut self, at: Position, old: GridCell, new: GridCell) {
         self.events.push(Event::Replace { at, old, new });
     }
 
-    fn pop(&mut self, old: u8) {
+    fn pop(&mut self, old: StackCell) {
         self.events.push(Event::Pop { old });
     }
 
@@ -214,7 +222,7 @@ impl Record for Timeline {
         self.events.push(Event::PopBottom);
     }
 
-    fn push(&mut self, new: u8) {
+    fn push(&mut self, new: StackCell) {
         self.events.push(Event::Push { new });
     }
 

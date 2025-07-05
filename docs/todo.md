@@ -2,10 +2,15 @@
 
 - [X] Skip over empty space correctly
 - [X] Implement IO buffer
-- [ ] Refactor & cleanup!!
+- [X] Make stack use 32-bit cells
+- [ ] Render 32-bit cells on sidebar
+- [ ] Full 32-bit everywhere + unicode with b93 compat flag
+- [ ] Shebang! Support
+- [ ] Play/Pause Hotkeys
+- [ ] Asciinema Recording
+- [ ] Visualize breakpoints (red background)
 - [ ] Re-draw cells modified by `p`
 - [ ] Implement load command
-- [ ] Visualize breakpoints (red background)
 
 ## Further out
 

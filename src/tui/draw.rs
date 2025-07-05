@@ -1,6 +1,6 @@
 use crate::{
     analyze::{self, Directions},
-    core::Position,
+    core::{Position, StackCell},
     debugger::Debugger,
     terminal::VirtualTerminal,
     tui::{
@@ -144,15 +144,7 @@ impl Draw for Sidebar<'_> {
             window.move_to(number_x, last_y)?;
             window.print(t(&format!("{}", bottom.0)))?;
             window.move_to(symbol_x, last_y)?;
-            if let Some(label) = value_label(bottom.0) {
-                window.print(t(label))?;
-            } else {
-                if let Some(c) = char::from_u32(bottom.0 as u32) {
-                    window.print_char('"')?;
-                    window.print_char(c)?;
-                    window.print_char('"')?;
-                }
-            }
+            print_label(*bottom, window)?;
 
             // Draw skip count
             window.move_to(skip_x, last_y - 2)?;
@@ -166,15 +158,7 @@ impl Draw for Sidebar<'_> {
                 window.move_to(number_x, y)?;
                 window.print(t(&format!("{}", cell.0)))?;
                 window.move_to(symbol_x, y)?;
-                if let Some(label) = value_label(cell.0) {
-                    window.print(t(label))?;
-                } else {
-                    if let Some(c) = char::from_u32(cell.0 as u32) {
-                        window.print_char('"')?;
-                        window.print_char(c)?;
-                        window.print_char('"')?;
-                    }
-                }
+                print_label(*cell, window)?;
                 y = y - 2;
             }
         } else {
@@ -184,20 +168,27 @@ impl Draw for Sidebar<'_> {
                 window.move_to(number_x, y)?;
                 window.print(t(&format!("{}", cell.0)))?;
                 window.move_to(symbol_x, y)?;
-                if let Some(label) = value_label(cell.0) {
-                    window.print(t(label))?;
-                } else {
-                    if let Some(c) = char::from_u32(cell.0 as u32) {
-                        window.print_char('"')?;
-                        window.print_char(c)?;
-                        window.print_char('"')?;
-                    }
-                }
+                print_label(*cell, window)?;
                 y = y - 2;
             }
         }
         Ok(())
     }
+}
+
+fn print_label(cell: StackCell, window: &mut Window) -> io::Result<()> {
+    if cell.0 <= (u8::MAX as i32) {
+        if let Some(label) = value_label(cell.0 as u8) {
+            window.print(t(label))?;
+        } else {
+            if let Some(c) = char::from_u32(cell.0 as u32) {
+                window.print_char('"')?;
+                window.print_char(c)?;
+                window.print_char('"')?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn value_label(value: u8) -> Option<&'static str> {

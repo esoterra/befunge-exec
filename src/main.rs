@@ -93,15 +93,16 @@ fn run(path: PathBuf) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::core::{Cell, Direction, Position};
+    use super::core::{Direction, Position, StackCell};
     use super::interpreter::{Interpreter, Status};
+    use crate::core::GridCell;
     use crate::io::VecIO;
     use crate::record::StdOutEventLog;
     use crate::space::Space;
 
     type DebugInterpreter<'src> = Interpreter<VecIO, StdOutEventLog>;
 
-    const EMPTY_STACK: &[Cell] = &[];
+    const EMPTY_STACK: &[StackCell] = &[];
 
     fn one_liner(line: &[u8]) -> DebugInterpreter {
         let program = Vec::from(line);
@@ -145,7 +146,7 @@ mod tests {
 
         assert_eq!(Direction::Right, interpreter.current_direction());
         assert_eq!(Position { x: 0, y: 0 }, interpreter.current_position());
-        assert_eq!(&[Cell(number)], interpreter.stack());
+        assert_eq!(&[StackCell(number as i32)], interpreter.stack());
     }
 
     #[test]
@@ -157,14 +158,14 @@ mod tests {
 
         assert_eq!(Direction::Right, interpreter.current_direction());
         assert_eq!(Position { x: 1, y: 0 }, interpreter.current_position());
-        assert_eq!(&[Cell(1)], interpreter.stack());
+        assert_eq!(&[StackCell(1)], interpreter.stack());
 
         let status = interpreter.step();
         assert_eq!(Status::Completed, status);
 
         assert_eq!(Direction::Left, interpreter.current_direction());
         assert_eq!(Position::ORIGIN, interpreter.current_position());
-        assert_eq!(&[Cell(1)], interpreter.stack());
+        assert_eq!(&[StackCell(1)], interpreter.stack());
     }
 
     #[test]
@@ -203,7 +204,10 @@ mod tests {
         assert_eq!(Status::Completed, interpreter.step());
         // Verify that the numbers are on the stack
         assert_eq!(Position { x: 3, y: 0 }, interpreter.current_position());
-        assert_eq!(&[Cell(2), Cell(1), Cell(1)], interpreter.stack());
+        assert_eq!(
+            &[StackCell(2), StackCell(1), StackCell(1)],
+            interpreter.stack()
+        );
         // Step over the p command
         assert_eq!(Status::Completed, interpreter.step());
         // Verify that the position and direction are correct
@@ -212,7 +216,7 @@ mod tests {
         assert_eq!(EMPTY_STACK, interpreter.stack());
         // Verify that the value 2 was placed into the specified position
         assert_eq!(
-            Cell(2),
+            GridCell(2),
             interpreter.space().get_cell(Position { x: 1, y: 1 })
         );
     }
@@ -230,13 +234,13 @@ mod tests {
         let status = interpreter.step();
         assert_eq!(Status::Completed, status);
 
-        assert_eq!(&[Cell(7), Cell(0)], interpreter.stack());
+        assert_eq!(&[StackCell(7), StackCell(0)], interpreter.stack());
 
         let status = interpreter.step();
         assert_eq!(Status::Completed, status);
 
         assert_eq!(Direction::Right, interpreter.current_direction());
         assert_eq!(Position { x: 7, y: 0 }, interpreter.current_position());
-        assert_eq!(&[Cell(b'4')], interpreter.stack());
+        assert_eq!(&[StackCell(b'4' as i32)], interpreter.stack());
     }
 }
