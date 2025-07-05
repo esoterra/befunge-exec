@@ -1,34 +1,55 @@
-# befunge-exec
+<div align="center">
+  <h1>Befunge Tools - <code>bft</code></h1>
 
-befunge-exec is a simple command line application that acts as a Befunge interpretter and debugger.
+  <p>
+    <strong>A collection of command line tools for executing, analyzing, and visualizing Befunge code.</strong>
+  </p>
+</div>
 
-## Background
+## Befunge
 
-Befunge 93 is an esoteric programming language where programs are 2 dimensional spaces of bytes.
-They are stored ascii text files or equivalently utf-8 files which contain no larger than 1-byte values.
-To execute the file a cursor moves through the space interpretting each byte as a command,
-and then based on the command updating its position, direction, stack, and the space itself.
-To learn more about Befunge 93 see [this page](https://esolangs.org/wiki/Befunge) on esolangs.org.
+[Befunge 93](https://esolangs.org/wiki/Befunge) is an esoteric programming language where
+* **programs are 2-dimensional grids** of `u8` cells, not sequences of lines;
+* **the program counter is 2-dimensional** and can move up, down, left, or right!
+* **instructions are ASCII characters** and occupy a single cell in the grid;
+* **instructions pop/push** from a stack of `i32` cells;
+* **programs can modify themselves** to store data and change program flow.
 
-## Running befunge-exec
+Befunge Tools currently targets Befunge 93 except that programs may be larger than 80x25. In the future, this may be updated to a new dialect with a Befunge 93 compatibility mode.
 
-Currently befunge-exec can only be run in an interactive mode from the command line.
+## Befunge Tools
 
-When it is run you will be prompted to name a file in the programs directory.
-This name should not include the .b93 file extension.
+Befunge Tools is a collection of command line tools for executing, analyzing, and visualizing Befunge code.
 
-Once this is done you will be prompted for commands.
+- [X] the `run` command which is a no-frills Befunge interpreter.
+- [X] the `debug` command which launches an interactive TUI environment.
+  - [X] command tab with debugger run/step/pause functionality
+  - [X] console tab with interactive virtual terminal
+  - [ ] (Planned) timeline tab with time-travel debugging
+  - [X] program visualization with path-aware highlighting
+  - [X] stack visualization sidebar
+  - [X] breakpoint support
+  - [ ] (Planned) Built-in `asciinema` recording
 
-### Commands
+## Run
 
-The format for each command is the value in the quoted string after the commands name.
-When prompted for commands type a value matching a single command format and then hit enter.
+> Execute `bft run ./path/to/file.b93` in your terminal.
 
-* Step "s" - Executes one opcode
-* Run "r" - Runs the program until a breakpoint is hit or the program terminates
-* Breakpoint "b \<x\> \<y\>" - Places a breakpoint at the specified location
-* Input "i .." - Sends the rest of your input into the input buffer of the interpreter byte for byte
-* Position "p" - Prints the current (x,y) coordinates of the kernel with the top left corner as (0,0)
-* Line "l" - Prints the current line of the program
-* Debug "d" - Prints the Rust debug formatted value of the entire interpreter
-* Quite "q" - Terminates the befunge-exec interactive debugger / interpreter
+Runs the program and
+* reads input from standard input,
+* writes output to standard output,
+* logs interpreter errors to standard error,
+* exits with status code 0 unless the interpreter encounters an error.
+
+## Debug - TUI Debugger
+
+> Execute `bft debug ./path/to/file.b93 2> log.txt` in your terminal.
+
+(Logging will probably become configurable or automatically placed in files in the future, but for now it is printed to standard error by default for development purposes and redirecting it is recommended/expected)
+
+Launches the interactive debugger Terminal User Interface (TUI) with the specified program loaded in.
+
+<figure>
+  <img src="./docs/tui_example.png" alt="A terminal window with the title 'Befunge Tools: lessmore.b93' that is displaying the Terminal User Interface (TUI) of a debugger for the Befunge esoteric programming language. It is made up of Box Drawing Characters and styled with ANSI color codes. It has a main program area displaying a program for a simple guessing game that picks a random number that you try to guess,, a sidebar with an empty table titled Stack, and a set of tabs at the bottom called Console, Commands, and Timeline. The Commands tab is currently selected and shows an empty user input prompt and help output instructing the user on how to operate the debugger.">
+  <figcaption align="center">The interactive debugger UI</figcaption>
+</figure>

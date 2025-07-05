@@ -1,8 +1,12 @@
 [package]
-name = "befunge-exec"
+name = "bft"
 version = "0.1.0"
-authors = ["t-kybrow"]
-edition = "2018"
+authors = ["Robin Brown"]
+edition = "2024"
 
 [dependencies]
-rand = "0.7.0"
+clap = { version = "4.5.34", features = ["derive"] }
+crossterm = "0.29.0"
+grid = "0.16.1"
+rand = "0.9.0"
+thiserror = "2.0.12"
