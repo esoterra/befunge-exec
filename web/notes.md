@@ -1,26 +1,6 @@
 # Notes
 
-```html
-<div class="bft-grid" data-bft-goal="stack==[77]">
-    <div class="bft-cell"></div>
-    <div class="bft-cell"></div>
-    <div class="bft-cell"></div>
-    <div class="bft-cell"></div>
-    <div class="bft-cell" data-bft-fixed="true">
-        <div class="bft-tile" data-bft-value="3"></div>
-    </div>
-</div>
-
-<div class="bft-inventory">
-    <div class="bft-tile" data-bft-value="3"></div>
-    <div class="bft-tile" data-bft-value="7"></div>
-    <div class="bft-tile" data-bft-value="8"></div>
-    <div class="bft-tile" data-bft-value="+"></div>
-    <div class="bft-tile" data-bft-value="*"></div>
-</div>
-```
-
-Stacks of tiles
+## TODO: Stacks of tiles
 
 ```html
 <div class="bft-inventory">
@@ -42,8 +22,13 @@ The program space
         <th>Value</th>
     </tr>
     <tr>
+        <td><code>data-bft-group</code></td>
+        <td>Which group this grid is a part of.<br>
+        Tiles must stay in their group.</td>
+    </tr>
+    <tr>
         <td><code>data-bft-goal</code></td>
-        <td>A validation used to determine if a program is correct</td>
+        <td>A validation used to determine if a <br>program is correct</td>
     </tr>
 </table>
 
@@ -65,7 +50,7 @@ A cell in the program space. A slot in which a `bft-tile` can be placed.
     <tr>
         <td><code>data-bft-goal</code></td>
         <td><code>"true"</code></td>
-        <td>Tiles cannot be dragged from or to a fixed cell</td>
+        <td>Tiles cannot be dragged from or<br>to a fixed cell</td>
     </tr>
 </table>
 
@@ -90,3 +75,13 @@ A "tile"
 
 A container for tiles not in use.
 
+<table>
+    <tr>
+        <th>Attribute</th>
+        <th>Value</th>
+    </tr>
+    <tr>
+        <td><code>data-bft-group</code></td>
+        <td>Which group this grid is a part of.<br> Tiles must stay in their group.</td>
+    </tr>
+</table>
