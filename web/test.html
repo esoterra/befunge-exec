@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset='utf-8'>
+    <title>Befunge Web Tools</title>
+    <link rel="stylesheet" href="./reset.css">
+    <link rel="stylesheet" href="./layout.css">
+    <link rel="stylesheet" href="./text.css">
+    <link rel="stylesheet" href="./befunge.css">
+    <script src="befunge.js"></script>
+</head>
+
+<body>
+    <header>
+        <nav>
+            <a href="/">Befunge Tools</a>
+        </nav>
+    </header>
+
+    <main>
+        <h1>Interactive Befunge Test</h1>
+
+        <p>
+            This is a test/demo of an interactive drag-and-drop environment for Befunge.
+        </p>
+
+        <br>
+        <h2>Puzzle 1</h2>
+
+        <p>
+            Drag tiles onto the program grid so that it computes the number <code>77</code>!
+        </p>
+
+        <div class="bft-grid" data-bft-goal="stack==[77]" data-bft-group="puzzle-1">
+            <div class="bft-cell"></div>
+            <div class="bft-cell"></div>
+            <div class="bft-cell" data-bft-fixed="true">
+                <div class="bft-tile" data-bft-value="+">+</div>
+            </div>
+            <div class="bft-cell"></div>
+            <div class="bft-cell" data-bft-fixed="true">
+                <div class="bft-tile" data-bft-value="*">*</div>
+            </div>
+            <div class="bft-cell" data-bft-fixed="true">
+                <div class="bft-tile" data-bft-value="@">@</div>
+            </div>
+        </div>
+
+        <p>Your Supply of Tiles!</p>
+
+        <div class="bft-inventory" data-bft-group="puzzle-1">
+            <div class="bft-tile" data-bft-value="3">3</div>
+            <div class="bft-tile" data-bft-value="7">7</div>
+            <div class="bft-tile" data-bft-value="8">8</div>
+        </div>
+
+        <br>
+        <h2>Puzzle 2</h2>
+
+        <p>
+            Drag tiles onto the program grid so that it computes the number <code>77</code> this time with different constraints!
+        </p>
+
+        <div class="bft-grid" data-bft-goal="stack==[77]" data-bft-group="puzzle-2">
+            <div class="bft-cell"></div>
+            <div class="bft-cell"></div>
+            <div class="bft-cell"></div>
+            <div class="bft-cell" data-bft-fixed="true">
+                <div class="bft-tile" data-bft-value="+">+</div>
+            </div>
+            <div class="bft-cell" data-bft-fixed="true">
+                <div class="bft-tile" data-bft-value="*">*</div>
+            </div>
+            <div class="bft-cell" data-bft-fixed="true">
+                <div class="bft-tile" data-bft-value="@">@</div>
+            </div>
+        </div>
+
+        <p>Your Supply of Tiles!</p>
+
+        <div class="bft-inventory" data-bft-group="puzzle-2">
+            <div class="bft-tile" data-bft-value="3">3</div>
+            <div class="bft-tile" data-bft-value="7">7</div>
+            <div class="bft-tile" data-bft-value="8">8</div>
+        </div>
+        <br>
+        <br>
+        <br>
+        <br>
+    </main>
+</body>
+
+</html>

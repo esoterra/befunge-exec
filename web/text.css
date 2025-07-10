@@ -1,0 +1,55 @@
+html {
+    font-family: Seravek, 'Gill Sans Nova', Ubuntu, Calibri, 'DejaVu Sans', source-sans-pro, sans-serif; 
+    font-size: 1.2em;
+    color: #381D2A;
+    text-rendering: optimizeLegibility;
+}
+
+section {
+    /* border-left: 4px solid; */
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+h1 {
+    font-weight: 700;
+    font-size: 150%;
+    margin-bottom: 24px;
+}
+
+h2 {
+    font-weight: 700;
+    font-size: 100%;
+    margin-bottom: 12px;
+    border-bottom: 2px solid;
+}
+
+h3 {
+    color: #6D606F;
+    font-weight: 700;
+    font-size: 100%;
+    margin-bottom: 8px;
+}
+
+p {
+    margin-bottom: 8px;
+}
+
+a, a:visited {
+    color: #BA5624;
+    text-decoration: none;
+}
+
+a::before {
+    content: "[";
+    color: gray;
+}
+
+a::after {
+    content: "]";
+    color: gray;
+}
+
+ul, ol {
+    margin-left: 30px;
+}
