@@ -1,39 +1,145 @@
+:root {
+    --corner-radius: 16px;
+
+    --cell-width: 96px;
+    --cell-height: 96px;
+
+    --cell-background: antiquewhite;
+    --cell-sides: #846e52;
+    --cell-shadow: #a38967;
+
+    --tile-background: antiquewhite;
+    --tile-border: #a38967;
+    --tile-sides: #846e52;
+    --tile-shadow: #a38967;
+    --tile-trim-color: #dbc19f;
+
+    --tile-fixed-border: rgb(128, 128, 128);
+    --tile-fixed-sides: rgb(96, 96, 96);
+    --tile-fixed-shadow: rgb(128, 128, 128);
+    --tile-fixed-trim-color: rgb(187, 187, 187);
+
+    --fudge-factor: 3px;
+
+    --tile-trim-width: 3px;
+
+    /* Cell Dimensions */
+    --cell-x-depth: 4px;
+    --cell-y-depth: 4px;
+
+    --cell-shadow-x: calc(var(--cell-x-depth) + 1px);
+    --cell-shadow-y: calc(var(--cell-y-depth) + 1px);
+    --cell-shadow-blur: calc(max(var(--cell-shadow-x), var(--cell-shadow-y)) + 2px);
+
+    /* Tile Dimensions */
+    --tile-x-height: 7px;
+    --tile-y-height: 7px;
+
+    --tile-shadow-x: calc(var(--tile-x-height) + 1px);
+    --tile-shadow-y: calc(var(--tile-y-height) + 1px);
+    --tile-shadow-blur: calc(max(var(--tile-shadow-x), var(--tile-shadow-y)) + 2px);
+
+    /* Placed Tile Dimensions */
+    --tile-placed-x-height: calc(var(--tile-x-height) - var(--cell-x-depth) + var(--fudge-factor));
+    --tile-placed-y-height: calc(var(--tile-y-height) - var(--cell-y-depth) + var(--fudge-factor));
+
+    --tile-placed-shadow-x: calc(var(--tile-placed-x-height) + 1px);
+    --tile-placed-shadow-y: calc(var(--tile-placed-y-height) + 1px);
+    --tile-placed-shadow-blur: calc(max(var(--tile-placed-shadow-x), var(--tile-placed-shadow-y)) + 2px);
+
+    --sidebar-width: 200px;
+    --sidebar-height: 400px;
+}
+
 .bft-grid {
     display: grid;
     padding: 8px;
+    margin-top: 16px;
+    margin-bottom: 16px;
 
     justify-items: center;
     grid-auto-flow: column;
 }
 
 .bft-cell {
-    width: 96px;
-    height: 96px;
-    background-color: antiquewhite;
-    border-radius: 8px;
+    /* Shape */
+    width: var(--cell-width);
+    height: var(--cell-height);
+    border-radius: var(--corner-radius);
+    /* Color */
+    background-color: var(--cell-background);
 }
 
 .bft-cell:empty {
-    box-shadow: inset 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+    box-shadow:
+        inset var(--cell-x-depth) var(--cell-y-depth) 0 0 var(--cell-sides),
+        inset var(--cell-shadow-x) var(--cell-shadow-y) var(--cell-shadow-blur) 0 var(--cell-shadow);
 }
 
 .bft-tile {
-    width: 96px;
-    height: 96px;
-
-    background-color: antiquewhite;
-    border-radius: 8px;
-    box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.4);
-
+    /* Dimensions */
+    width: var(--cell-width);
+    height: var(--cell-height);
+    border-radius: var(--corner-radius);
+    border-style: solid;
+    border-width: 6px;
+    /* Text */
     font-size: 64px;
     text-align: center;
     align-content: center;
+    /* Color */
+    background-color: var(--tile-background);
+    border-color: var(--tile-border);
+    box-shadow:
+        var(--tile-x-height) var(--tile-y-height) 0 0 var(--tile-sides),
+        calc(var(--tile-x-height) * 0.25) calc(var(--tile-y-height) * 0.25) 0 0 var(--tile-sides),
+        calc(var(--tile-x-height) * 0.5) calc(var(--tile-y-height) * 0.5) 0 0 var(--tile-sides),
+        calc(var(--tile-x-height) * 0.75) calc(var(--tile-y-height) * 0.75) 0 0 var(--tile-sides),
+        var(--tile-shadow-x) var(--tile-shadow-y) var(--tile-shadow-blur) 0 var(--tile-shadow),
+        inset 0px 0px 0px var(--tile-trim-width) var(--tile-trim-color);
+    
+    margin-top: calc(0px - var(--tile-y-height));
+    margin-left: calc(0px - var(--tile-x-height));
 }
 
+.bft-cell .bft-tile:not(:hover) {
+    box-shadow:
+        var(--tile-placed-x-height) var(--tile-placed-y-height) 0 0 var(--tile-sides),
+        calc(var(--tile-placed-x-height) * 0.25) calc(var(--tile-placed-y-height) * 0.25) 0 0 var(--tile-sides),
+        calc(var(--tile-placed-x-height) * 0.5) calc(var(--tile-placed-y-height) * 0.5) 0 0 var(--tile-sides),
+        calc(var(--tile-placed-x-height) * 0.75) calc(var(--tile-placed-y-height) * 0.75) 0 0 var(--tile-sides),
+        var(--tile-placed-shadow-x) var(--tile-placed-shadow-y) var(--tile-placed-shadow-blur) 0 var(--tile-shadow),
+        inset 0px 0px 0px var(--tile-trim-width) var(--tile-trim-color);
+
+    margin-top: calc(0px - var(--tile-placed-y-height));
+    margin-left: calc(0px - var(--tile-placed-x-height));
+}
+
+
 .bft-cell[data-bft-fixed="true"] .bft-tile {
-    border-style: solid;
-    border-width: 4px;
-    border-color: black;
+    border-color: var(--tile-fixed-border);
+    box-shadow:
+        var(--tile-placed-x-height) var(--tile-placed-y-height) 0px 0 var(--tile-fixed-sides),
+        calc(var(--tile-placed-x-height) * 0.25) calc(var(--tile-placed-y-height) * 0.25) 0 0 var(--tile-fixed-sides),
+        calc(var(--tile-placed-x-height) * 0.5) calc(var(--tile-placed-y-height) * 0.5) 0 0 var(--tile-fixed-sides),
+        calc(var(--tile-placed-x-height) * 0.75) calc(var(--tile-placed-y-height) * 0.75) 0 0 var(--tile-fixed-sides),
+        var(--tile-placed-shadow-x) var(--tile-placed-shadow-y) var(--tile-placed-shadow-blur) 0 var(--tile-fixed-shadow),
+        inset 0px 0px 0px var(--tile-trim-width) var(--tile-fixed-trim-color);
+
+    margin-top: calc(0px - var(--tile-placed-y-height));
+    margin-left: calc(0px - var(--tile-placed-x-height));
+}
+
+.bft-tile[data-bft-value="@"] {
+    content: url(static/stop.svg);
+}
+
+.bft-tile[data-bft-value="+"] {
+    padding-bottom: 4px;
+}
+
+.bft-tile[data-bft-value="*"] {
+    padding-top: 16px;
 }
 
 .bft-inventory {
@@ -44,8 +150,29 @@
     justify-items: center;
     grid-auto-flow: column;
 
-    border-radius: 16px;
+    border-radius: var(--corner-radius);
     border-style: dashed;
     border-width: 4px;
     border-color: gray;
+}
+
+.bft-cursor {
+    outline-style: solid;
+    outline-width: 8px;
+    outline-color: rgb(19, 53, 202);
+    outline-offset: 12px;
+}
+
+#bft-sidebar {
+    position: fixed;
+    left: calc(((100vw - 800px) / 2) + 820px);
+    top: calc((100vh - var(--sidebar-height))/2);
+
+    width: var(--sidebar-width);
+    height: var(--sidebar-height);
+
+    border-radius: var(--corner-radius);
+    border-style: solid;
+    border-width: 4px;
+    border-color: var(--tile-sides);
 }

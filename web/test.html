@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="./layout.css">
     <link rel="stylesheet" href="./text.css">
     <link rel="stylesheet" href="./befunge.css">
-    <script src="befunge.js"></script>
+    <script src="bft-drag-and-drop.js"></script>
 </head>
 
 <body>
@@ -17,6 +17,10 @@
             <a href="/">Befunge Tools</a>
         </nav>
     </header>
+
+    <div id="bft-sidebar">
+
+    </div>
 
     <main>
         <h1>Interactive Befunge Test</h1>
@@ -32,8 +36,8 @@
             Drag tiles onto the program grid so that it computes the number <code>77</code>!
         </p>
 
-        <div class="bft-grid" data-bft-goal="stack==[77]" data-bft-group="puzzle-1">
-            <div class="bft-cell"></div>
+        <div class="bft-grid" data-bft-expected-stack="77" data-bft-group="puzzle-1">
+            <div class="bft-cell bft-cursor"></div>
             <div class="bft-cell"></div>
             <div class="bft-cell" data-bft-fixed="true">
                 <div class="bft-tile" data-bft-value="+">+</div>

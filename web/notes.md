@@ -1,15 +1,5 @@
 # Notes
 
-## TODO: Stacks of tiles
-
-```html
-<div class="bft-inventory">
-    <div class="bft-stack" data-bft-stack-amount="10">
-        <div class="bft-tile" data-bft-value="*"></div>
-    </div>
-</div>
-```
-
 # BFT Classes
 
 ### Grid (`bft-grid`)
@@ -27,13 +17,14 @@ The program space
         Tiles must stay in their group.</td>
     </tr>
     <tr>
-        <td><code>data-bft-goal</code></td>
-        <td>A validation used to determine if a <br>program is correct</td>
+        <td><code>data-bft-expected-stack</code></td>
+        <td>A comma separated list of the values expected to be on the stack <br>at the end of the program</td>
+    </tr>
+    <tr>
+        <td><code>data-bft-expected-output</code></td>
+        <td>The output that the program is expected to produce</td>
     </tr>
 </table>
-
-Goals
-- `stack==[<values>]` - Assert that the stack must contain exactly these items where `<values>` is a comma separated list of decimal integers.
 
 <hr>
 
@@ -85,3 +76,13 @@ A container for tiles not in use.
         <td>Which group this grid is a part of.<br> Tiles must stay in their group.</td>
     </tr>
 </table>
+
+# TODO: Stacks of tiles
+
+```html
+<div class="bft-inventory">
+    <div class="bft-stack" data-bft-stack-amount="10">
+        <div class="bft-tile" data-bft-value="*"></div>
+    </div>
+</div>
+```
