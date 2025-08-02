@@ -52,7 +52,10 @@
 }
 
 .bft-grid {
-    display: grid;
+    display: flex;
+    flex-direction: column;
+    justify-items: center;
+
     padding: 8px;
     margin-top: 16px;
     margin-bottom: 16px;
@@ -61,7 +64,15 @@
     grid-auto-flow: column;
 }
 
+.bft-row {
+    display: flex;
+    flex-direction: row;
+    justify-items: center;
+}
+
 .bft-cell {
+    box-sizing: border-box;
+    margin: 16px;
     /* Shape */
     width: var(--cell-width);
     height: var(--cell-height);
@@ -77,19 +88,18 @@
 }
 
 .bft-tile {
+    box-sizing: border-box;
     /* Dimensions */
     width: var(--cell-width);
     height: var(--cell-height);
     border-radius: var(--corner-radius);
-    border-style: solid;
-    border-width: 6px;
     /* Text */
     font-size: 64px;
     text-align: center;
     align-content: center;
     /* Color */
     background-color: var(--tile-background);
-    border-color: var(--tile-border);
+    border: 6px solid var(--tile-border);
     box-shadow:
         var(--tile-x-height) var(--tile-y-height) 0 0 var(--tile-sides),
         calc(var(--tile-x-height) * 0.25) calc(var(--tile-y-height) * 0.25) 0 0 var(--tile-sides),
@@ -115,7 +125,6 @@
     margin-left: calc(0px - var(--tile-placed-x-height));
 }
 
-
 .bft-cell[data-bft-fixed="true"] .bft-tile {
     border-color: var(--tile-fixed-border);
     box-shadow:
@@ -130,8 +139,31 @@
     margin-left: calc(0px - var(--tile-placed-x-height));
 }
 
+.bft-cell[data-bft-fixed="true"]:has(.bft-tile[data-bft-value=" "]) {
+    border: 6px dashed var(--tile-fixed-border);
+    /* box-shadow: inset 0px 0px 0px var(--tile-trim-width) var(--tile-fixed-trim-color); */
+    background-color: white;
+}
+
+.bft-cell[data-bft-fixed="true"] .bft-tile[data-bft-value=" "] {
+    display: none;
+}
+
+.bft-tile[data-bft-value="v"],
+.bft-tile[data-bft-value="^"],
+.bft-tile[data-bft-value="<"],
+.bft-tile[data-bft-value=">"],
+.bft-tile[data-bft-value="_"],
+.bft-tile[data-bft-value="|"],
+.bft-tile[data-bft-value="?"]   {
+    font-weight: 500;
+    color: darkgreen;
+}
+
 .bft-tile[data-bft-value="@"] {
-    content: url(static/stop.svg);
+    /* content: url(static/stop.svg); */
+    padding-bottom: 8px;
+    color: darkred;
 }
 
 .bft-tile[data-bft-value="+"] {

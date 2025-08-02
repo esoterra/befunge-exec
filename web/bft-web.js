@@ -16,26 +16,12 @@ function onload() {
 
     document.addEventListener("dragstart", (event) => {
         const target = event.target;
-        if (target === null || !(target instanceof Element)) {
-            console.log("Target null or not an Element");
-            return; // We are only interested in targets that are elements.
-        }
-        if (!target.classList.contains("bft-tile")) {
-            console.log("Target is not a tile");
-            return; // We are only interested in .bft-tile elements.
-        }
-        const value = target.getAttribute(TILE_VALUE_ATTRIBUTE);
-        if (value === null) {
-            console.log("No bft-value found");
-            return; // Ignore tiles without `data-bft-value` set.
-        }
 
-        const parentFixed = target.parentElement.getAttribute(CELL_FIXED_ATTRIBUTE);
-        if (parentFixed === "true") {
-            console.log("Can't move fixed.");
+        const { value, validSource } = analyzeDropSource(event);
+        if (!validSource) {
             return;
         }
-
+        
         event.dataTransfer.setData(TILE_VALUE_TRANSFER_TYPE, value);
         event.dataTransfer.effectAllowed = "move";
 
@@ -48,6 +34,7 @@ function onload() {
     });
 
     const dragUpdate = (event) => {
+        // console.log(event);
         swapValue = undefined;
         if (!event.dataTransfer.types.includes(TILE_VALUE_TRANSFER_TYPE)) {
             return;
@@ -55,6 +42,7 @@ function onload() {
         const { target, validTarget, willSwap, targetsTile } = analyzeDropDestination(event);
 
         if (!validTarget) {
+            console.log("target not valid")
             return;
         }
 
@@ -75,6 +63,7 @@ function onload() {
     document.addEventListener("dragover", dragUpdate);
 
     document.addEventListener("drop", (event) => {
+        // console.log(event); 
         if (!event.dataTransfer.types.includes(TILE_VALUE_TRANSFER_TYPE)) {
             console.log("Couldn't drop!! No tile value");
             return;
@@ -109,6 +98,7 @@ function onload() {
     })
 
     document.addEventListener("dragend", (event) => {
+        // console.log(event);
         if (!event.dataTransfer.types.includes(TILE_VALUE_TRANSFER_TYPE)) {
             return;
         }
@@ -131,6 +121,35 @@ function onload() {
         event.preventDefault();
     })
 }
+
+const analyzeDropSource = (event) => {
+    const target = event.target;
+
+    if (target === null || !(target instanceof Element)) {
+        // We are only interested in targets that are elements.
+        console.log("Target null or not an Element");
+        return { validSource: false }; 
+    }
+    if (!target.classList.contains("bft-tile")) {
+        // We are only interested in .bft-tile elements.
+        console.log("Target is not a tile");
+        return { validSource: false }; 
+    }
+    const value = target.getAttribute(TILE_VALUE_ATTRIBUTE);
+    if (value === null) {
+        // Ignore tiles without `data-bft-value` set.
+        console.log("No bft-value found");
+        return { validSource: false }; 
+    }
+
+    const parentFixed = target.parentElement.getAttribute(CELL_FIXED_ATTRIBUTE);
+    if (parentFixed === "true") {
+        console.log("Can't move fixed.");
+        return { validSource: false }; 
+    }
+
+    return { value, validSource: true }; 
+};
 
 const analyzeDropDestination = (event) => {
     const target = event.target;
@@ -176,5 +195,134 @@ function groupForElement(element) {
         return groupForElement(element.parentElement);
     } else {
         return null;
+    }
+}
+
+function rootsForElement(element) {
+    const group = groupForElement(element);
+    return document.querySelectorAll(`[data-bft-group="${group}"]`)
+}
+
+const successClass = 'bft-success';
+const failClass = 'bft-fail'
+
+function updateRoots(element, success, fail) {
+    rootsForElement(element).forEach((element) => {
+        if (success) {
+            element.classList.add(successClass);
+        } else {
+            element.classList.remove(successClass);
+        }
+        if (fail) {
+            element.classList.add(failClass);
+        } else {
+            element.classList.remove(failClass)
+        }
+    });
+}
+
+class Clock {
+    id;
+
+    constructor(func, delay) {
+        this.id = setInterval(func, delay);
+    }
+
+    stop() {
+        if (this.id) {
+            clearInterval(this.id);
+            this.id = false;
+        }
+    }
+}
+
+class Interpreter {
+    group;
+    state;
+    clock;
+
+    x;
+    y;
+
+    constructor(group) {
+        this.group = group;
+        this.state = 'stopped';
+        this.clock = undefined;
+
+        this.x = 0;
+        this.y = 0;
+    }
+
+    stop() {
+
+    }
+
+    start() {
+
+    }
+
+    reset() {
+        // Empty the stack
+        this.stack.replaceChildren()
+
+        // Move cursor to beginning
+        this.getCell(this.x, this.y).classList.remove('bft-cursor');
+        this.getCell(0, 0).classList.add('bft-cursor');
+        this.x = 0;
+        this.y = 0;
+        
+        // Update the state to stopped
+        this.getAllRoots().forEach((root) => {
+            root.classList.remove('bft-running');
+            root.classList.add('bft-stopped');
+        })
+    }
+
+    getAllRoots() {
+        return document.querySelectorAll(`[data-bft-group="${group}"]`);
+    }
+
+    getButton() {
+        return document.querySelector(`[data-bft-group="${group}"] .bft-button`)
+    }
+
+    getGrid() {
+        return document.querySelector(`[data-bft-group="${group}"] .bft-grid`);
+    }
+
+    getStack() {
+        return document.querySelector(`[data-bft-group="${group}"] .bft-stack`);
+    }
+
+    getAllCells() {
+        return document.querySelectorAll(`[data-bft-group="${group}"] .bft-cell`);
+    }
+
+    getCell(x, y) {
+        const grid = this.getGrid();
+        const row = grid.children.item(y);
+        return row.children.item(x);
+    }
+}
+
+const state = new Map();
+
+function getOrInitState(group) {
+    const groupState = state.get(group);
+    if (groupState) {
+        return groupState;
+    } else {
+        const newState = new GroupState(group);
+        groupState.set(group, newState);
+        return newState;
+    }
+}
+
+function runButtonClick(element) {
+    const group = groupForElement(element);
+    const groupState = getOrInitState(group);
+    
+    if (groupState.state === 'stopped') {
+        
     }
 }
